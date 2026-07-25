@@ -8,6 +8,8 @@ Dates use UTC.
 - 2026-07-25: Added independent ChatGPT OAuth authorization for Codex channels,
   including PKCE, one-time server-side flows, manual localhost callback input,
   channel reauthorization, multilingual UI, and regression tests.
+- 2026-07-25: Synchronized the fork with upstream stable release
+  `v1.0.0-rc.21` while preserving the local Codex relay and OAuth changes.
 
 ## Planned
 
