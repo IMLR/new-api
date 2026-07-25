@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/openai"
@@ -182,7 +183,7 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, req *http.Header, info *rel
 	// Clients may omit it or include parameters like `application/json; charset=utf-8`,
 	// which can be rejected by the upstream. Force the exact media type.
 	req.Set("Content-Type", "application/json")
-	if info.IsStream {
+	if info.IsStream || common.GetContextKeyBool(c, constant.ContextKeyCodexUpstreamStream) {
 		req.Set("Accept", "text/event-stream")
 	} else if req.Get("Accept") == "" {
 		req.Set("Accept", "application/json")

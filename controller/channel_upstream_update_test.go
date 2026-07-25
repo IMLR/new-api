@@ -5,8 +5,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relay/channel/codex"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -21,6 +23,15 @@ func TestNormalizeModelNames(t *testing.T) {
 	})
 
 	require.Equal(t, []string{"gpt-4o", "gpt-4.1"}, result)
+}
+
+func TestFetchChannelUpstreamModelIDsCodexUsesStaticModelList(t *testing.T) {
+	ids, err := fetchChannelUpstreamModelIDs(&model.Channel{
+		Type: constant.ChannelTypeCodex,
+	})
+
+	require.NoError(t, err)
+	require.Equal(t, normalizeModelNames(codex.UpstreamModelList), ids)
 }
 
 func TestMergeModelNames(t *testing.T) {

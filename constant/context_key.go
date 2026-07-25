@@ -67,6 +67,11 @@ const (
 	ContextKeyLanguage ContextKey = "language"
 	ContextKeyIsStream ContextKey = "is_stream"
 
+	// ContextKeyCodexUpstreamStream marks ChatCompletions-to-Responses
+	// compatibility requests that must be streamed upstream for Codex while
+	// preserving the client's original non-streaming response mode.
+	ContextKeyCodexUpstreamStream ContextKey = "codex_upstream_stream"
+
 	// ContextKeyAuditLogged marks that the current request has already recorded
 	// a manage/operation audit log inside the handler. When set, the admin-audit
 	// fallback in authHelper (finishAdminAudit) skips its record to avoid

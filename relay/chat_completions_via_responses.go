@@ -96,6 +96,11 @@ func chatCompletionsViaResponses(c *gin.Context, info *relaycommon.RelayInfo, ad
 	if err != nil {
 		return nil, types.NewErrorWithStatusCode(err, types.ErrorCodeInvalidRequest, http.StatusBadRequest, types.ErrOptionWithSkipRetry())
 	}
+	codexUpstreamStream := info.ChannelType == constant.ChannelTypeCodex && !info.IsStream
+	if codexUpstreamStream {
+		responsesReq.Stream = common.GetPointer(true)
+		common.SetContextKey(c, constant.ContextKeyCodexUpstreamStream, true)
+	}
 	info.AppendRequestConversion(types.RelayFormatOpenAIResponses)
 
 	savedRelayMode := info.RelayMode
@@ -146,7 +151,7 @@ func chatCompletionsViaResponses(c *gin.Context, info *relaycommon.RelayInfo, ad
 
 	httpResp = resp.(*http.Response)
 	clientStream := info.IsStream
-	upstreamStream := isResponsesEventStreamContentType(httpResp.Header.Get("Content-Type"))
+	upstreamStream := codexUpstreamStream || isResponsesEventStreamContentType(httpResp.Header.Get("Content-Type"))
 	info.IsStream = clientStream || upstreamStream
 	if httpResp.StatusCode != http.StatusOK {
 		newApiErr := service.RelayErrorHandler(c.Request.Context(), httpResp, false)

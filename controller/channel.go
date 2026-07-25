@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	relaychannel "github.com/QuantumNous/new-api/relay/channel"
+	"github.com/QuantumNous/new-api/relay/channel/codex"
 	"github.com/QuantumNous/new-api/relay/channel/gemini"
 	"github.com/QuantumNous/new-api/relay/channel/ollama"
 	"github.com/QuantumNous/new-api/service"
@@ -1215,6 +1216,14 @@ func FetchModels(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": true,
 			"data":    models,
+		})
+		return
+	}
+
+	if req.Type == constant.ChannelTypeCodex {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data":    codex.UpstreamModelList,
 		})
 		return
 	}

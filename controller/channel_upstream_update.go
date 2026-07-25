@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/relay/channel/codex"
 	"github.com/QuantumNous/new-api/relay/channel/gemini"
 	"github.com/QuantumNous/new-api/relay/channel/ollama"
 	"github.com/QuantumNous/new-api/service"
@@ -283,6 +284,10 @@ func fetchChannelUpstreamModelIDs(channel *model.Channel) ([]string, error) {
 			return nil, err
 		}
 		return normalizeModelNames(models), nil
+	}
+
+	if channel.Type == constant.ChannelTypeCodex {
+		return normalizeModelNames(codex.UpstreamModelList), nil
 	}
 
 	var url string
