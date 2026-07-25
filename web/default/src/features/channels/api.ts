@@ -73,6 +73,29 @@ export type CodexCredentialRefreshResponse = {
   }
 }
 
+export type CodexOAuthStartResponse = {
+  success: boolean
+  message?: string
+  data?: {
+    flow_id: string
+    authorize_url: string
+    expires_at: string
+  }
+}
+
+export type CodexOAuthCompleteResponse = {
+  success: boolean
+  message?: string
+  data?: {
+    key?: string
+    account_id: string
+    email?: string
+    expires_at: string
+    last_refresh: string
+    channel_id?: number
+  }
+}
+
 // ============================================================================
 // Base Channel CRUD Operations
 // ============================================================================
@@ -309,6 +332,33 @@ export async function getChannelKey(
 // ============================================================================
 // Codex Channel Operations
 // ============================================================================
+
+export async function startCodexOAuth(
+  channelId?: number,
+  proxy = ''
+): Promise<CodexOAuthStartResponse> {
+  const path = channelId
+    ? `/api/channel/${channelId}/codex/oauth/start`
+    : '/api/channel/codex/oauth/start'
+  const res = await api.post(path, { proxy }, channelActionConfig())
+  return res.data
+}
+
+export async function completeCodexOAuth(
+  flowId: string,
+  input: string,
+  channelId?: number
+): Promise<CodexOAuthCompleteResponse> {
+  const path = channelId
+    ? `/api/channel/${channelId}/codex/oauth/complete`
+    : '/api/channel/codex/oauth/complete'
+  const res = await api.post(
+    path,
+    { flow_id: flowId, input },
+    channelActionConfig()
+  )
+  return res.data
+}
 
 export async function refreshCodexCredential(
   channelId: number

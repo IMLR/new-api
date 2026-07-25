@@ -36,6 +36,7 @@ import {
   Eraser,
   Plus,
   Eye,
+  Link2,
   RefreshCw,
   Code,
   Route,
@@ -172,6 +173,7 @@ import {
 import type { Channel } from '../../types'
 import { useChannels } from '../channels-provider'
 import { AdvancedCustomEditorDialog } from '../dialogs/advanced-custom-editor-dialog'
+import { CodexOAuthDialog } from '../dialogs/codex-oauth-dialog'
 import { FetchModelsDialog } from '../dialogs/fetch-models-dialog'
 import {
   MissingModelsConfirmationDialog,
@@ -600,6 +602,7 @@ export function ChannelMutateDrawer({
   )
   const canRevealChannelKey = currentUser?.role === ROLE.SUPER_ADMIN
   const [fetchModelsDialogOpen, setFetchModelsDialogOpen] = useState(false)
+  const [codexOAuthDialogOpen, setCodexOAuthDialogOpen] = useState(false)
   const [channelKey, setChannelKey] = useState<string | null>(null)
   const [isChannelKeyLoading, setIsChannelKeyLoading] = useState(false)
   const [isCodexCredentialRefreshing, setIsCodexCredentialRefreshing] =
@@ -3045,6 +3048,20 @@ export function ChannelMutateDrawer({
                                       )}
                                     </div>
                                     <div className='flex flex-wrap items-center gap-2'>
+                                      <Button
+                                        type='button'
+                                        size='sm'
+                                        onClick={() =>
+                                          setCodexOAuthDialogOpen(true)
+                                        }
+                                        disabled={sensitiveLocked}
+                                        className='bg-cyan-500 text-slate-950 hover:bg-cyan-400'
+                                      >
+                                        <Link2 className='mr-2 h-4 w-4' />
+                                        {isEditing
+                                          ? t('Reauthorize with ChatGPT')
+                                          : t('Authorize with ChatGPT')}
+                                      </Button>
                                       {isEditing && channelId && (
                                         <Button
                                           type='button'
@@ -4669,6 +4686,28 @@ export function ChannelMutateDrawer({
             ? parseModelsString(form.getValues('models') || '')
             : undefined
         }
+      />
+
+      <CodexOAuthDialog
+        open={codexOAuthDialogOpen}
+        onOpenChange={setCodexOAuthDialogOpen}
+        channelId={channelId ?? undefined}
+        proxy={currentProxy}
+        onAuthorized={(result) => {
+          if (result.key) {
+            form.setValue('key', result.key, {
+              shouldDirty: true,
+              shouldValidate: true,
+            })
+            return
+          }
+          setChannelKey(null)
+          if (channelId) {
+            queryClient.invalidateQueries({
+              queryKey: channelsQueryKeys.detail(channelId),
+            })
+          }
+        }}
       />
 
       <SecureVerificationDialog
