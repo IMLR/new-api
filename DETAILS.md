@@ -20,3 +20,6 @@
 - [`docs/codex-oauth.md`](./docs/codex-oauth.md): independent ChatGPT OAuth
   authorization for Codex channels, including endpoints, state storage,
   security boundaries, and operator workflow.
+- [`docs/hk-deployment.md`](./docs/hk-deployment.md): native multi-architecture
+  GHCR builds, restricted SSH deployment, runtime configuration, health
+  verification, and rollback behavior for the Hong Kong VPS.

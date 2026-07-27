@@ -1,0 +1,78 @@
+name: Container Image
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: container-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build multi-platform image
+    uses: docker/github-builder/.github/workflows/build.yml@v1
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    with:
+      output: image
+      push: ${{ github.event_name != 'pull_request' }}
+      platforms: linux/amd64,linux/arm64
+      meta-images: ghcr.io/imlr/new-api
+      meta-tags: |
+        type=raw,value=latest
+        type=sha,prefix=sha-,format=long
+      cache: true
+      cache-scope: new-api
+      set-meta-labels: true
+    secrets:
+      registry-auths: |
+        - registry: ghcr.io
+          username: IMLR
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+  deploy-hk:
+    name: Deploy HK
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production-hk
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Configure restricted SSH
+        shell: bash
+        env:
+          DEPLOY_KEY: ${{ secrets.HK_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.HK_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          install -m 600 /dev/null "$HOME/.ssh/deploy"
+          printf '%s\n' "$DEPLOY_KEY" > "$HOME/.ssh/deploy"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
+      - name: Pull image and deploy
+        shell: bash
+        env:
+          GHCR_TOKEN: ${{ github.token }}
+          DEPLOY_ACTOR: ${{ github.actor }}
+          DEPLOY_SHA: ${{ github.sha }}
+        run: |
+          printf '%s\n%s\n%s\n' "$DEPLOY_ACTOR" "$GHCR_TOKEN" "$DEPLOY_SHA" | ssh \
+            -i "$HOME/.ssh/deploy" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            -p "${{ vars.HK_PORT }}" \
+            "${{ vars.HK_USER }}@${{ vars.HK_HOST }}"
+
+      - name: Remove deployment key
+        if: always()
+        run: rm -f "$HOME/.ssh/deploy"

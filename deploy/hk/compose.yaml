@@ -1,0 +1,78 @@
+services:
+  new-api:
+    image: ${NEW_API_IMAGE:?Set NEW_API_IMAGE in .env}
+    restart: unless-stopped
+    command: ["--log-dir", "/app/logs"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      SQL_DSN: ${SQL_DSN}
+      REDIS_CONN_STRING: ${REDIS_CONN_STRING}
+      SESSION_SECRET: ${SESSION_SECRET}
+      CRYPTO_SECRET: ${CRYPTO_SECRET}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - newapi_data:/data
+      - newapi_logs:/app/logs
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O - http://localhost:3000/api/status | grep -Eq '\"success\"[[:space:]]*:[[:space:]]*true'",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: proxy
+      traefik.http.routers.new-api-wew7hv-3-web.entrypoints: web
+      traefik.http.routers.new-api-wew7hv-3-web.middlewares: redirect-to-https@file
+      traefik.http.routers.new-api-wew7hv-3-web.rule: Host(`aihk.imlr.dev`)
+      traefik.http.routers.new-api-wew7hv-3-web.service: new-api-wew7hv-3-web
+      traefik.http.routers.new-api-wew7hv-3-websecure.entrypoints: websecure
+      traefik.http.routers.new-api-wew7hv-3-websecure.rule: Host(`aihk.imlr.dev`)
+      traefik.http.routers.new-api-wew7hv-3-websecure.service: new-api-wew7hv-3-websecure
+      traefik.http.routers.new-api-wew7hv-3-websecure.tls.certresolver: letsencrypt
+      traefik.http.services.new-api-wew7hv-3-web.loadbalancer.server.port: "3000"
+      traefik.http.services.new-api-wew7hv-3-websecure.loadbalancer.server.port: "3000"
+    networks:
+      - default
+      - proxy
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: newapi
+      POSTGRES_USER: newapi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U newapi -d newapi"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+
+volumes:
+  newapi_data:
+  newapi_logs:
+  postgres_data:
+  redis_data:
+
+networks:
+  proxy:
+    external: true

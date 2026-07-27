@@ -5,6 +5,8 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-07-27: Added native AMD64/ARM64 GHCR builds and restricted automatic
+  deployment of immutable commit images to the Hong Kong VPS.
 - 2026-07-27: Synchronized the fork with upstream release `v1.0.0-rc.22`,
   adopted dynamic Codex model discovery, migrated the custom OAuth interface to
   the current frontend directory, and retained the local Codex relay behavior.
