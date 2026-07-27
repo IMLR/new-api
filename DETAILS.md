@@ -12,8 +12,7 @@
   context.
 - `common/`: shared JSON, Redis, HTTP, logging, and utility functions.
 - `dto/`, `constant/`, `types/`: API contracts and shared types.
-- `web/default/`: React 19 administrator and user interface.
-- `web/classic/`: legacy React administrator and user interface.
+- `web/`: React 19 administrator and user interface.
 - `docs/`: focused design and operator documentation for complex features.
 
 ## Feature documents

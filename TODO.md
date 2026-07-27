@@ -5,6 +5,9 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-07-27: Synchronized the fork with upstream release `v1.0.0-rc.22`,
+  adopted dynamic Codex model discovery, migrated the custom OAuth interface to
+  the current frontend directory, and retained the local Codex relay behavior.
 - 2026-07-25: Added independent ChatGPT OAuth authorization for Codex channels,
   including PKCE, one-time server-side flows, manual localhost callback input,
   channel reauthorization, multilingual UI, and regression tests.
