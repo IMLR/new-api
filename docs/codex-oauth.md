@@ -67,3 +67,7 @@ process.
 - A completion attempt consumes the flow even when ownership, state, or token
   exchange validation fails.
 - Existing-channel reauthorization is recorded in the administrator audit log.
+
+### Chat Completions 流式转换排查
+
+当 Codex 上游返回 SSE 正文但 Content-Type 被代理标为 application/json 时，Chat Completions 转换仍须使用 SSE 解析器。不能仅在客户端非流式时识别 Codex 上游流式，否则客户端 stream=true 会误入 JSON 解析，出现 `bad_response_body: invalid character 'e' looking for beginning of value`。回归测试覆盖了该响应头异常及原有非流式聚合行为。此服务端修正需部署网关后生效。

@@ -71,6 +71,7 @@ func (a *chatViaResponsesTestAdaptor) DoRequest(_ *gin.Context, info *relaycommo
 	body := `{"id":"resp_1","model":"gpt-test","created_at":1710000000,"status":"completed","output":[{"type":"message","content":[{"type":"output_text","text":"ok"}]}],"usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}`
 	if a.convertedResponsesRequest.Stream != nil && *a.convertedResponsesRequest.Stream {
 		body = strings.Join([]string{
+			`event: response.output_text.delta`,
 			`data: {"type":"response.output_text.delta","delta":"ok"}`,
 			`data: {"type":"response.done","response":{"model":"gpt-test","status":"completed","usage":{"input_tokens":1,"output_tokens":1,"total_tokens":2}}}`,
 			`data: [DONE]`,
@@ -203,6 +204,16 @@ func TestChatCompletionsViaResponsesForcesCodexUpstreamStreamOnly(t *testing.T) 
 			requestStream:          &streamTrue,
 			wantUpstreamStream:     &streamTrue,
 			upstreamContentType:    "text/event-stream",
+			wantDownstreamSSE:      true,
+			wantInfoIsStreamDuring: true,
+		},
+		{
+			name:                   "codex stream with mislabeled JSON content type",
+			channelType:            constant.ChannelTypeCodex,
+			clientStream:           true,
+			requestStream:          &streamTrue,
+			wantUpstreamStream:     &streamTrue,
+			upstreamContentType:    "application/json",
 			wantDownstreamSSE:      true,
 			wantInfoIsStreamDuring: true,
 		},

@@ -155,7 +155,9 @@ func chatCompletionsViaResponses(c *gin.Context, info *relaycommon.RelayInfo, ad
 
 	httpResp = resp.(*http.Response)
 	clientStream := info.IsStream
-	upstreamStream := codexUpstreamStream || isResponsesEventStreamContentType(httpResp.Header.Get("Content-Type"))
+	// Codex always uses SSE here, including when the client already requested
+	// streaming. Some upstream proxies label that body as application/json.
+	upstreamStream := info.ChannelType == constant.ChannelTypeCodex || isResponsesEventStreamContentType(httpResp.Header.Get("Content-Type"))
 	info.IsStream = clientStream || upstreamStream
 	if httpResp.StatusCode != http.StatusOK {
 		newApiErr := service.RelayErrorHandler(c.Request.Context(), httpResp, false)
