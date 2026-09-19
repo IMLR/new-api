@@ -32,6 +32,7 @@ import {
   stringifyAdvancedCustomConfig,
   validateAdvancedCustomConfig,
 } from './advanced-custom'
+import { normalizeClineCredential } from './cline-credential'
 
 // ============================================================================
 // Form Validation Schema
@@ -294,6 +295,21 @@ export const channelFormSchema = z
       )
     }
 
+    if (data.type === 60) {
+      if (data.multi_key_mode && data.multi_key_mode !== 'single')
+        addRequiredIssue(
+          ctx,
+          'multi_key_mode',
+          'Cline requires a single credential per channel'
+        )
+      if (data.key?.trim()) {
+        try {
+          normalizeClineCredential(data.key)
+        } catch {
+          addRequiredIssue(ctx, 'key', 'Invalid Cline credential')
+        }
+      }
+    }
     if (data.type === 57) {
       if (data.multi_key_mode && data.multi_key_mode !== 'single') {
         addRequiredIssue(

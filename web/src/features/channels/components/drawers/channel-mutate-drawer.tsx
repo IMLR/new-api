@@ -174,6 +174,7 @@ import {
 } from '../../lib/status-code-risk-guard'
 import type { Channel } from '../../types'
 import { useChannels } from '../channels-provider'
+import { ClineCredentialImport } from '../cline-credential-import'
 import { AdvancedCustomEditorDialog } from '../dialogs/advanced-custom-editor-dialog'
 import { CodexOAuthDialog } from '../dialogs/codex-oauth-dialog'
 import { FetchModelsDialog } from '../dialogs/fetch-models-dialog'
@@ -850,7 +851,9 @@ export function ChannelMutateDrawer({
     multiKeyMode === 'batch' || multiKeyMode === 'multi_to_single'
   const isChannelDetailLoading = isEditing && isChannelLoading
   const supportsMultiKeyAddMode =
-    currentType !== 57 && !(currentType === 41 && vertexKeyType === 'api_key')
+    currentType !== 60 &&
+    currentType !== 57 &&
+    !(currentType === 41 && vertexKeyType === 'api_key')
   const addModeOptions = useMemo(
     () =>
       supportsMultiKeyAddMode
@@ -1464,6 +1467,12 @@ export function ChannelMutateDrawer({
       header_override: form.getValues('header_override'),
       proxy: form.getValues('proxy'),
     })
+    if (type === 60 && response.credential) {
+      form.setValue('key', response.credential, {
+        shouldDirty: true,
+        shouldValidate: true,
+      })
+    }
     if (response.success && response.data) {
       return response.data
     }
@@ -3071,6 +3080,17 @@ export function ChannelMutateDrawer({
                                 }}
                               />
 
+                              {currentType === 60 && (
+                                <ClineCredentialImport
+                                  disabled={sensitiveLocked}
+                                  onImport={(value) =>
+                                    form.setValue('key', value, {
+                                      shouldDirty: true,
+                                      shouldValidate: true,
+                                    })
+                                  }
+                                />
+                              )}
                               {currentType === 57 && (
                                 <div className='border-border/60 flex flex-col gap-3 border-y py-4'>
                                   <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>

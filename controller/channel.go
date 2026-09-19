@@ -14,6 +14,7 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/cline"
 	relaychannel "github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/ollama"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -511,6 +512,22 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 		}
 	}
 
+	if channel.Type == constant.ChannelTypeCline {
+		if channel.ChannelInfo.IsMultiKey {
+			return fmt.Errorf("Cline requires a single-credential channel")
+		}
+		if isAdd || strings.TrimSpace(channel.Key) != "" {
+			credential, err := cline.ParseCredential(channel.Key)
+			if err != nil {
+				return err
+			}
+			encoded, err := common.Marshal(credential)
+			if err != nil {
+				return err
+			}
+			channel.Key = string(encoded)
+		}
+	}
 	// Codex OAuth key validation (optional, only when JSON object is provided)
 	if channel.Type == constant.ChannelTypeCodex {
 		trimmedKey := strings.TrimSpace(channel.Key)
@@ -622,6 +639,10 @@ func AddChannel(c *gin.Context) {
 		return
 	}
 
+	if addChannelRequest.Channel.Type == constant.ChannelTypeCline && addChannelRequest.Mode != "single" && addChannelRequest.Mode != "" {
+		common.ApiError(c, fmt.Errorf("Cline requires a single-credential channel"))
+		return
+	}
 	addChannelRequest.Channel.CreatedTime = common.GetTimestamp()
 	keys := make([]string, 0)
 	switch addChannelRequest.Mode {
@@ -1299,7 +1320,7 @@ func FetchModels(c *gin.Context) {
 		}
 
 		key := strings.TrimSpace(req.Key)
-		if req.Type != constant.ChannelTypeCodex {
+		if req.Type != constant.ChannelTypeCodex && req.Type != constant.ChannelTypeCline {
 			key = strings.Split(key, "\n")[0]
 		}
 		channel = &model.Channel{
@@ -1309,19 +1330,27 @@ func FetchModels(c *gin.Context) {
 		}
 	}
 
-	models, err := fetchChannelUpstreamModelIDs(channel)
-	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"success": false,
-			"message": fmt.Sprintf("获取模型列表失败: %s", err.Error()),
-		})
-		return
+	if channel.Type == constant.ChannelTypeCline && req.Proxy != nil {
+		settings := channel.GetSetting()
+		settings.Proxy = strings.TrimSpace(*req.Proxy)
+		channel.SetSetting(settings)
 	}
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "",
-		"data":    models,
-	})
+	// Return rotated credentials only for unsaved, user-supplied Cline imports.
+	models, err := fetchChannelUpstreamModelIDs(channel)
+	credential := ""
+	if req.Type == constant.ChannelTypeCline && channel.Id == 0 {
+		credential = channel.Key
+	}
+	response := gin.H{"success": err == nil, "message": ""}
+	if credential != "" {
+		response["credential"] = credential
+	}
+	if err != nil {
+		response["message"] = fmt.Sprintf("获取模型列表失败: %s", err.Error())
+	} else {
+		response["data"] = models
+	}
+	c.JSON(http.StatusOK, response)
 }
 
 func BatchSetChannelTag(c *gin.Context) {

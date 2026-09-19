@@ -17,6 +17,8 @@
 
 ## Feature documents
 
+- [`docs/cline.md`](./docs/cline.md): Cline credential import, independent renewal, subscription-aware model discovery and OpenAI chat relay.
+
 - [`docs/codex-oauth.md`](./docs/codex-oauth.md): independent ChatGPT OAuth
   authorization for Codex channels, including endpoints, state storage,
   security boundaries, and operator workflow.

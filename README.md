@@ -510,3 +510,7 @@ If this project is helpful to you, welcome to give us a ⭐️ Star！
 <sub>Built with ❤️ by QuantumNous</sub>
 
 </div>
+
+### Cline channel integration
+
+This fork supports Cline credential JSON import, independent token renewal, and subscription-aware model discovery. See [Cline channel documentation](./docs/cline.md).

@@ -5236,6 +5236,12 @@
     "Zero retention": "零数据保留",
     "Zhipu": "智谱",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Cline": "Cline",
+    "Import Cline credential": "导入 Cline 凭证",
+    "Invalid Cline credential": "Cline 凭证格式无效，必须包含 refreshToken",
+    "Cline requires a single credential per channel": "每个 Cline 渠道仅支持一份凭证",
+    "Paste Cline credential JSON (refreshToken required)": "粘贴 Cline 凭证 JSON（必须包含 refreshToken）",
+    "Import a Cline credential or Desktop providers.json. Tokens renew automatically. Model discovery includes free models and active ClinePass models.": "支持导入凭证或 Desktop 的 providers.json。凭证自动续期，获取模型时按订阅状态显示免费及套餐模型。"
   }
 }

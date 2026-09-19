@@ -5236,6 +5236,12 @@
     "Zero retention": "Aucune rétention",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Cline": "Cline",
+    "Import Cline credential": "Import Cline credential",
+    "Invalid Cline credential": "Invalid Cline credential",
+    "Cline requires a single credential per channel": "Cline requires a single credential per channel",
+    "Paste Cline credential JSON (refreshToken required)": "Paste Cline credential JSON (refreshToken required)",
+    "Import a Cline credential or Desktop providers.json. Tokens renew automatically. Model discovery includes free models and active ClinePass models.": "Import a Cline credential or Desktop providers.json. Tokens renew automatically. Model discovery includes free models and active ClinePass models."
   }
 }

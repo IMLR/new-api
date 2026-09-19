@@ -198,6 +198,7 @@ export interface ChannelBalanceResponse {
 }
 
 export interface FetchModelsResponse {
+  credential?: string
   success: boolean
   message?: string
   data?: string[]

@@ -78,6 +78,7 @@ export const CHANNEL_TYPES = {
   57: 'ChatGPT Subscription (Codex)',
   58: 'Advanced Custom',
   59: 'Sub2API',
+  60: 'Cline',
 } as const
 
 const CHANNEL_TYPE_DISPLAY_ORDER: number[] = [
@@ -392,6 +393,7 @@ export const TYPE_TO_KEY_PROMPT: Record<number, string> = {
   33: 'Format: Ak|Sk|Region',
   50: 'Format: AccessKey|SecretKey (or just ApiKey if upstream is New API)',
   51: 'Format: Access Key ID|Secret Access Key',
+  60: 'Paste Cline credential JSON (refreshToken required)',
   57: 'Paste Codex OAuth JSON credential (access_token / refresh_token / account_id)',
   59: 'Enter API key for this channel',
 }

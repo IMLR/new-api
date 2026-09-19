@@ -5,6 +5,8 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-09-19: Added Cline channels with JSON credential import, automatic token rotation, subscription-aware model discovery and streaming/nonstreaming chat relay.
+
 - 2026-07-27: Added native AMD64/ARM64 GHCR builds and restricted automatic
   deployment of immutable commit images to the Hong Kong VPS.
 - 2026-07-27: Synchronized the fork with upstream release `v1.0.0-rc.22`,
