@@ -40,7 +40,11 @@ for (const key of [
     value: key === 'window' ? window : window[key],
   })
 }
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+Object.assign(globalThis, {
+  IS_REACT_ACT_ENVIRONMENT: true,
+  requestAnimationFrame: window.requestAnimationFrame.bind(window),
+  cancelAnimationFrame: window.cancelAnimationFrame.bind(window),
+})
 const { act } = await import('react')
 const { createRoot } = await import('react-dom/client')
 const i18next = (await import('i18next')).default

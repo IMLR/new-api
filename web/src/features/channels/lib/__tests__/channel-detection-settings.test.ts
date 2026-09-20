@@ -37,6 +37,7 @@ test('saved channel detection and endpoint preferences survive reopening', () =>
   const payload = transformFormDataToCreatePayload(values).channel
   const restored = transformChannelToFormDefaults({
     id: 11,
+    channel_info: { is_multi_key: false },
     ...payload,
   } as Channel)
   assert.equal(restored.relay_detection, true)
