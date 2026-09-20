@@ -98,6 +98,11 @@ export function ChannelDetectionSettings(props: {
                   >
                     <span className='min-w-0 flex-1 break-all'>{model}</span>
                     <Select
+                      items={[
+                        { value: 'auto', label: t('Auto-detect (Default)') },
+                        { value: 'openai', label: 'Chat Completions' },
+                        { value: 'openai-response', label: 'Responses' },
+                      ]}
                       value={field.value?.[model] || 'auto'}
                       onValueChange={(value) => {
                         if (!value) {

@@ -300,12 +300,13 @@ export const channelFormSchema = z
     }
 
     if (data.type === 60) {
-      if (data.multi_key_mode && data.multi_key_mode !== 'single')
+      if (data.multi_key_mode && data.multi_key_mode !== 'single') {
         addRequiredIssue(
           ctx,
           'multi_key_mode',
           'Cline requires a single credential per channel'
         )
+      }
       if (data.key?.trim()) {
         try {
           normalizeClineCredential(data.key)

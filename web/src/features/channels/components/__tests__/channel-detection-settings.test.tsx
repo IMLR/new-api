@@ -63,6 +63,7 @@ function SettingsFixture(props: { type: number }) {
       ...CHANNEL_FORM_DEFAULT_VALUES,
       type: props.type,
       models: 'gpt-6-astra',
+      model_endpoints: { 'gpt-6-astra': 'openai-response' as const },
     },
   })
   return (
@@ -85,9 +86,11 @@ test('OpenAI channel exposes a detection switch and a per-model endpoint selecto
     assert.equal(toggle.getAttribute('aria-checked'), 'false')
     await act(async () => toggle.click())
     assert.equal(toggle.getAttribute('aria-checked'), 'true')
-    assert.ok(
-      container.querySelector('[aria-label="Endpoint Type: gpt-6-astra"]')
+    const endpoint = container.querySelector(
+      '[aria-label="Endpoint Type: gpt-6-astra"]'
     )
+    assert.ok(endpoint)
+    assert.ok(endpoint.textContent?.includes('Responses'))
   } finally {
     await act(async () => root.unmount())
     container.remove()
