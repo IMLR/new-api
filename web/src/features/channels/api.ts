@@ -696,3 +696,35 @@ export async function getPrefillGroups(
   const res = await api.get('/api/prefill_group', { params: { type } })
   return res.data
 }
+
+export type FingerprintCandidate = { model: string; score: number }
+export type ChannelFingerprintResult = {
+  model: string
+  reference: string
+  candidates: FingerprintCandidate[]
+  samples: {
+    text: string
+    count: number
+    candidates?: FingerprintCandidate[]
+    error?: string
+  }[]
+}
+
+export async function testChannelFingerprint(
+  id: number,
+  model: string,
+  family: 'gpt' | 'claude'
+) {
+  const response = await api.post<{
+    success: boolean
+    message?: string
+    data?: ChannelFingerprintResult
+  }>(
+    `/api/channel/fingerprint/${id}`,
+    { model, family },
+    channelActionConfig({ timeout: 250000 })
+  )
+  if (!response.data.success || !response.data.data)
+    throw new Error(response.data.message || 'Fingerprint test failed')
+  return response.data.data
+}

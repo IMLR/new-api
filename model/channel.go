@@ -951,6 +951,22 @@ func (channel *Channel) ValidateSettings() error {
 			return err
 		}
 	}
+	for name, endpoint := range channelParams.ModelEndpoints {
+		if strings.TrimSpace(name) == "" {
+			return fmt.Errorf("empty endpoint model")
+		}
+		switch constant.EndpointType(endpoint) {
+		case constant.EndpointTypeOpenAI, constant.EndpointTypeOpenAIResponse:
+			if channel.Type != constant.ChannelTypeOpenAI {
+				return fmt.Errorf("model endpoint preferences require an OpenAI channel")
+			}
+		default:
+			return fmt.Errorf("unsupported model endpoint: %s", endpoint)
+		}
+	}
+	if channelParams.PassThroughBodyEnabled && len(channelParams.ModelEndpoints) > 0 {
+		return fmt.Errorf("model endpoint preferences cannot be combined with body passthrough")
+	}
 	if _, err := common.ParseProxyURLStrict(channelParams.Proxy); err != nil {
 		return fmt.Errorf("invalid channel proxy: %w", err)
 	}

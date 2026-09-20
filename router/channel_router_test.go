@@ -48,3 +48,7 @@ func assertChannelRoutePermission(t *testing.T, method string, path string, perm
 	}
 	t.Fatalf("route %s %s not found", method, path)
 }
+
+func TestFingerprintRouteRequiresChannelOperatePermission(t *testing.T) {
+	assertChannelRoutePermission(t, http.MethodPost, "/fingerprint/:id", authz.ChannelOperate, controller.TestChannelFingerprint)
+}

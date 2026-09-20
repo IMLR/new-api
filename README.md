@@ -514,3 +514,7 @@ If this project is helpful to you, welcome to give us a ⭐️ Star！
 ### Cline channel integration
 
 This fork supports Cline credential JSON import, independent token renewal, and subscription-aware model discovery. See [Cline channel documentation](./docs/cline.md).
+
+### 渠道中转站检测与模型端点
+
+渠道可独立开启模型指纹候选排名，并为 OpenAI 渠道的各模型保存端点偏好，供普通调用和渠道测试使用。参考库来源、计费行为与结果边界见 [渠道指纹检测说明](docs/channel-fingerprints.md)。

@@ -99,6 +99,7 @@ import type {
   SearchChannelsResponse,
 } from '../../types'
 import { useChannels } from '../channels-provider'
+import { ChannelFingerprintButton } from './channel-fingerprint-button'
 
 type ChannelTestDialogProps = {
   open: boolean
@@ -328,6 +329,13 @@ function ChannelTestDialogContent({
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const currentChannelId = currentRow.id
+  const fingerprintEnabled = useMemo(() => {
+    try {
+      return JSON.parse(currentRow.setting || '{}').relay_detection === true
+    } catch {
+      return false
+    }
+  }, [currentRow.setting])
   const batchStopRequestedRef = useRef(false)
   const batchProgressToastIdRef = useRef<ReturnType<
     typeof toast.loading
@@ -923,32 +931,43 @@ function ChannelTestDialogContent({
           const isTestingModel = testingModels.has(model)
 
           return (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <Button
-                    variant='ghost'
-                    size='icon-sm'
-                    onClick={() => testSingleModel(model)}
-                    disabled={isTestingModel || isBatchTesting}
-                    aria-label={t('Test Connection')}
-                  />
-                }
-              >
-                {isTestingModel ? (
-                  <Loader2 className='size-4 animate-spin' />
-                ) : (
-                  <Gauge className='size-4' />
-                )}
-              </TooltipTrigger>
-              <TooltipContent>{t('Test Connection')}</TooltipContent>
-            </Tooltip>
+            <div className='flex items-center gap-1'>
+              {fingerprintEnabled && (
+                <ChannelFingerprintButton
+                  channelId={currentChannelId}
+                  model={model}
+                  disabled={isTestingModel || isBatchTesting}
+                />
+              )}
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <Button
+                      variant='ghost'
+                      size='icon-sm'
+                      onClick={() => testSingleModel(model)}
+                      disabled={isTestingModel || isBatchTesting}
+                      aria-label={t('Test Connection')}
+                    />
+                  }
+                >
+                  {isTestingModel ? (
+                    <Loader2 className='size-4 animate-spin' />
+                  ) : (
+                    <Gauge className='size-4' />
+                  )}
+                </TooltipTrigger>
+                <TooltipContent>{t('Test Connection')}</TooltipContent>
+              </Tooltip>
+            </div>
           )
         },
         enableSorting: false,
       },
     ],
     [
+      fingerprintEnabled,
+      currentChannelId,
       defaultTestModel,
       isBatchTesting,
       t,

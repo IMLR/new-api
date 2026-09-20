@@ -36,9 +36,10 @@ import (
 )
 
 type testResult struct {
-	context     *gin.Context
-	localErr    error
-	newAPIError *types.NewAPIError
+	responseBody []byte
+	context      *gin.Context
+	localErr     error
+	newAPIError  *types.NewAPIError
 }
 
 func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointType string) string {
@@ -48,6 +49,14 @@ func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointTyp
 	}
 	if strings.HasSuffix(modelName, ratio_setting.CompactModelSuffix) {
 		return string(constant.EndpointTypeOpenAIResponseCompact)
+	}
+	if channel != nil {
+		if endpoint := channel.GetSetting().ModelEndpoints[modelName]; endpoint != "" {
+			return endpoint
+		}
+		if service.ShouldChannelUseResponses(channel.GetSetting(), channel.Id, channel.Type, modelName) {
+			return string(constant.EndpointTypeOpenAIResponse)
+		}
 	}
 	if channel != nil && channel.Type == constant.ChannelTypeCodex {
 		return string(constant.EndpointTypeOpenAIResponse)
@@ -73,6 +82,11 @@ func resolveChannelTestUserID(c *gin.Context) (int, error) {
 }
 
 func testChannel(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool) testResult {
+	return testChannelWithPrompt(ctx, channel, testUserID, testModel, endpointType, isStream, "")
+}
+
+// Internal bounded probes share the existing channel conversion, accounting and authentication path.
+func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUserID int, testModel string, endpointType string, isStream bool, prompt string) testResult {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -233,6 +247,26 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 	}
 
 	request := buildTestRequest(testModel, endpointType, channel, isStream)
+	if prompt != "" {
+		switch req := request.(type) {
+		case *dto.GeneralOpenAIRequest:
+			req.Messages = []dto.Message{{Role: "user", Content: prompt}}
+			req.MaxTokens = common.GetPointer(uint(4096))
+			if req.MaxCompletionTokens != nil {
+				req.MaxCompletionTokens = common.GetPointer(uint(4096))
+				req.MaxTokens = nil
+			}
+		case *dto.OpenAIResponsesRequest:
+			data, err := common.Marshal(prompt)
+			if err != nil {
+				return testResult{localErr: err}
+			}
+			req.Input = data
+			req.MaxOutputTokens = common.GetPointer(uint(4096))
+		default:
+			return testResult{localErr: fmt.Errorf("fingerprint probes require a text endpoint")}
+		}
+	}
 
 	info, err := relaycommon.GenRelayInfo(c, relayFormat, request, nil)
 
@@ -510,11 +544,14 @@ func testChannel(ctx context.Context, channel *model.Channel, testUserID int, te
 		Group:            info.UsingGroup,
 		Other:            other,
 	})
-	common.SysLog(fmt.Sprintf("testing channel #%d, response: \n%s", channel.Id, string(respBody)))
+	if prompt == "" {
+		common.SysLog(fmt.Sprintf("testing channel #%d, response: \n%s", channel.Id, string(respBody)))
+	}
 	return testResult{
-		context:     c,
-		localErr:    nil,
-		newAPIError: nil,
+		context:      c,
+		responseBody: respBody,
+		localErr:     nil,
+		newAPIError:  nil,
 	}
 }
 

@@ -319,3 +319,7 @@ this software, either in source code form or as a compiled binary, for any
 purpose, commercial or non-commercial, and by any means.
 
 For more information, please refer to https://unlicense.org/
+
+## ModelTrace fingerprint algorithm
+
+The numerical fingerprint ranking algorithm is adapted from [xqy2006/ModelTrace](https://github.com/xqy2006/ModelTrace), MIT licensed. The original license is retained in `pkg/modelfingerprint/data/MODELTRACE-LICENSE` and embedded in the binary. GPT reference statistics originate from that project; Claude reference statistics were collected independently through OpenRouter. See `docs/channel-fingerprints.md` for provenance and limitations.

@@ -218,6 +218,10 @@ export const channelFormSchema = z
     multi_key_type: z.enum(['random', 'polling']).optional(),
     batch_add_set_key_prefix_2_name: z.boolean().optional(),
     key_mode: z.enum(['append', 'replace']).optional(), // For editing multi-key channels
+    relay_detection: z.boolean().optional(),
+    model_endpoints: z
+      .record(z.string(), z.enum(['openai', 'openai-response']))
+      .optional(),
     // Channel extra settings (stored in setting JSON, not sent directly)
     force_format: z.boolean().optional(),
     thinking_to_content: z.boolean().optional(),
@@ -393,6 +397,8 @@ export const CHANNEL_FORM_DEFAULT_VALUES: ChannelFormValues = {
   pass_through_body_enabled: false,
   system_prompt: '',
   system_prompt_override: false,
+  relay_detection: false,
+  model_endpoints: {} as Record<string, 'openai' | 'openai-response'>,
   // Type-specific settings
   is_enterprise_account: false,
   vertex_key_type: 'json',
@@ -431,6 +437,8 @@ export function transformChannelToFormDefaults(
     pass_through_body_enabled: false,
     system_prompt: '',
     system_prompt_override: false,
+    relay_detection: false,
+    model_endpoints: {} as Record<string, 'openai' | 'openai-response'>,
   }
 
   if (channel.setting) {
@@ -443,6 +451,8 @@ export function transformChannelToFormDefaults(
         pass_through_body_enabled: parsed.pass_through_body_enabled || false,
         system_prompt: parsed.system_prompt || '',
         system_prompt_override: parsed.system_prompt_override || false,
+        relay_detection: parsed.relay_detection === true,
+        model_endpoints: parsed.model_endpoints || {},
       }
     } catch (error) {
       // eslint-disable-next-line no-console
@@ -560,6 +570,20 @@ function buildSettingJSON(formData: ChannelFormValues): string {
     pass_through_body_enabled: formData.pass_through_body_enabled || false,
     system_prompt: formData.system_prompt || '',
     system_prompt_override: formData.system_prompt_override || false,
+    relay_detection:
+      (formData.type === 1 || formData.type === 14) &&
+      formData.relay_detection === true,
+    model_endpoints:
+      formData.type === 1
+        ? Object.fromEntries(
+            Object.entries(formData.model_endpoints || {}).filter(([model]) =>
+              formData.models
+                .split(',')
+                .map((value) => value.trim())
+                .includes(model)
+            )
+          )
+        : {},
   }
   return JSON.stringify(settingObj)
 }

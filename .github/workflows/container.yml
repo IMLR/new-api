@@ -12,7 +12,36 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify:
+    name: Verify channel detection and endpoint preferences
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.1'
+          cache: true
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1'
+      - name: Install frontend dependencies
+        working-directory: web
+        run: bun install --frozen-lockfile
+      - name: Lint channel changes
+        working-directory: web
+        run: bunx oxlint -c .oxlintrc.json src/features/channels/api.ts src/features/channels/lib/channel-form.ts src/features/channels/components/channel-detection-settings.tsx src/features/channels/components/dialogs/channel-fingerprint-button.tsx src/features/channels/components/dialogs/channel-test-dialog.tsx src/features/channels/components/drawers/channel-mutate-drawer.tsx src/features/channels/components/__tests__/channel-detection-settings.test.tsx src/features/channels/components/__tests__/channel-fingerprint-button.test.tsx src/features/channels/lib/__tests__/channel-detection-settings.test.ts
+      - name: Type check
+        working-directory: web
+        run: bun run typecheck
+      - name: Channel frontend regression tests
+        working-directory: web
+        run: bun test src/features/channels/lib/__tests__/channel-detection-settings.test.ts src/features/channels/components/__tests__/channel-detection-settings.test.tsx src/features/channels/components/__tests__/channel-fingerprint-button.test.tsx
+      - name: Go regression tests
+        run: go test ./pkg/modelfingerprint ./controller ./model ./service ./router -run 'Test(RankMatchesFrozen|RefusalDoesNot|NumbersSelect|Fingerprint|ChannelTestUsesSaved|ChannelEndpointPreference)' -count=1
   build:
+    needs: verify
     name: Build multi-platform image
     uses: docker/github-builder/.github/workflows/build.yml@v1
     permissions:

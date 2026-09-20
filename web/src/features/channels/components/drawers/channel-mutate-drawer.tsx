@@ -173,6 +173,7 @@ import {
   collectNewDisallowedStatusCodeRedirects,
 } from '../../lib/status-code-risk-guard'
 import type { Channel } from '../../types'
+import { ChannelDetectionSettings } from '../channel-detection-settings'
 import { useChannels } from '../channels-provider'
 import { ClineCredentialImport } from '../cline-credential-import'
 import { AdvancedCustomEditorDialog } from '../dialogs/advanced-custom-editor-dialog'
@@ -290,6 +291,8 @@ const SENSITIVE_FORM_FIELDS = [
   'pass_through_body_enabled',
   'system_prompt',
   'system_prompt_override',
+  'relay_detection',
+  'model_endpoints',
   'allow_service_tier',
   'disable_store',
   'allow_safety_identifier',
@@ -3277,6 +3280,7 @@ export function ChannelMutateDrawer({
                       className='scroll-mt-4'
                     >
                       <ChannelModelsSection>
+                        <ChannelDetectionSettings form={form} />
                         <div className='space-y-5'>
                           <div className='border-border/60 bg-muted/10 rounded-lg border p-4'>
                             <FormField

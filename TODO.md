@@ -24,3 +24,11 @@ Dates use UTC.
   client behavior when the upstream authorization protocol changes.
 - Add an integration test backed by Redis to cover cross-instance OAuth flow
   consumption.
+
+### 2026-09-20 渠道指纹检测与模型端点
+
+- [x] 按渠道保存中转站检测开关和 OpenAI 模型端点偏好。
+- [x] 复用渠道测试执行三次指纹采样，展示候选及逐次排名。
+- [x] 添加评分一致性、端点优先级、配置校验和前端保存/交互回归用例。
+- [ ] GitHub CI/CD 验证与发布（按用户要求不在 VPS 编译测试）。
+- [ ] 后续研究跨家族联合评分及行为/拒绝特征融合，不将现有库内排名解释为身份概率。
