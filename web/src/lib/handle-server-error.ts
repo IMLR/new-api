@@ -22,17 +22,9 @@ import { toast } from 'sonner'
 
 import { getServerErrorMessageKey } from '@/lib/server-error-message'
 
-export function handleServerError(error: unknown) {
-  // eslint-disable-next-line no-console
-  console.log(error)
-
-  let errMsg = i18next.t('Something went wrong!')
-
+export function getServerErrorMessage(error: unknown): string {
   const messageKey = getServerErrorMessageKey(error)
-  if (messageKey) {
-    toast.error(i18next.t(messageKey))
-    return
-  }
+  if (messageKey) return i18next.t(messageKey)
 
   if (
     error &&
@@ -40,12 +32,20 @@ export function handleServerError(error: unknown) {
     'status' in error &&
     Number(error.status) === 204
   ) {
-    errMsg = i18next.t('Content not found.')
+    return i18next.t('Content not found.')
   }
 
   if (error instanceof AxiosError) {
-    errMsg = error.response?.data.title
+    const payload = error.response?.data
+    for (const value of [payload?.message, payload?.title, error.message]) {
+      if (typeof value === 'string' && value.trim()) return value
+    }
+  } else if (error instanceof Error && error.message.trim()) {
+    return error.message
   }
+  return i18next.t('Something went wrong!')
+}
 
-  toast.error(errMsg)
+export function handleServerError(error: unknown) {
+  toast.error(getServerErrorMessage(error))
 }

@@ -735,13 +735,14 @@ export async function testChannelFingerprint(
 export async function getChannelFingerprint(id: number, model: string) {
   const response = await api.get<{
     success: boolean
+    message?: string
     data: ChannelFingerprintResult | null
   }>(
     `/api/channel/fingerprint/${id}`,
     channelActionConfig({ params: { model } })
   )
   if (!response.data.success) {
-    throw new Error('Fingerprint test failed')
+    throw new Error(response.data.message || 'Fingerprint test failed')
   }
   return response.data.data
 }

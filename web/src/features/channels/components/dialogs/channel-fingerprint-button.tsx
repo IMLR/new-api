@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
+import { getServerErrorMessage } from '@/lib/handle-server-error'
 
 import {
   getChannelFingerprint,
@@ -142,7 +143,10 @@ export function ChannelFingerprintButton(props: {
           <p role='status'>{t('Collecting three fingerprint samples...')}</p>
         )}
         {(mutation.isError || result.isError) && (
-          <p role='alert'>{t('Fingerprint test failed')}</p>
+          <p role='alert'>
+            {t('Fingerprint test failed')} ·{' '}
+            {getServerErrorMessage(mutation.error || result.error)}
+          </p>
         )}
         {data && !running && (
           <>
