@@ -121,8 +121,8 @@ test('fingerprint runs in background and cached results open without a paid requ
     await act(async () => {
       await client.refetchQueries({ queryKey })
     })
-    const candidate = Array.from(container.querySelectorAll('button')).find(
-      (item) => item.textContent?.includes('gpt-5.6-luna')
+    const candidate = [...container.querySelectorAll('button')].find((item) =>
+      item.textContent?.includes('gpt-5.6-luna')
     )
     assert.ok(candidate)
     assert.ok(candidate.textContent?.includes('1.800'))

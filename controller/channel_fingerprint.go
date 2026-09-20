@@ -29,6 +29,7 @@ type fingerprintJob struct {
 	Candidates []modelfingerprint.Candidate `json:"candidates"`
 	Samples    []modelfingerprint.Sample    `json:"samples"`
 	created    time.Time
+	expiration *time.Timer
 }
 
 // Results are local to this server process and expire after one hour.
@@ -135,6 +136,7 @@ func TestChannelFingerprint(c *gin.Context) {
 		if job.Status == "running" {
 			running++
 		} else if time.Since(job.created) >= time.Hour {
+			job.expiration.Stop()
 			delete(fingerprintJobs.jobs, k)
 		}
 	}
@@ -152,21 +154,25 @@ func TestChannelFingerprint(c *gin.Context) {
 			}
 		}
 		if oldest != nil {
+			oldest.expiration.Stop()
 			delete(fingerprintJobs.jobs, oldestKey)
 		}
 	}
 	job := &fingerprintJob{Model: input.Model, Status: "running", Reference: source,
 		Candidates: []modelfingerprint.Candidate{}, Samples: []modelfingerprint.Sample{}, created: time.Now()}
+	if previous := fingerprintJobs.jobs[key]; previous != nil {
+		previous.expiration.Stop()
+	}
 	fingerprintJobs.jobs[key] = job
 	snapshot := *job
-	fingerprintJobs.Unlock()
-	time.AfterFunc(time.Hour, func() {
+	job.expiration = time.AfterFunc(time.Hour, func() {
 		fingerprintJobs.Lock()
 		defer fingerprintJobs.Unlock()
 		if fingerprintJobs.jobs[key] == job {
 			delete(fingerprintJobs.jobs, key)
 		}
 	})
+	fingerprintJobs.Unlock()
 	go func() {
 		samples := collectFingerprintSamples(challenges, func(i int, challenge modelfingerprint.Challenge) modelfingerprint.Sample {
 			ctx, cancel := context.WithTimeout(context.Background(), 70*time.Second)

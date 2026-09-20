@@ -88,6 +88,14 @@ export function ChannelFingerprintButton(props: {
   const running = mutation.isPending || result.data?.status === 'running'
   const data = result.data
   const highest = data?.candidates?.[0]
+  let summary = t('No valid fingerprint samples')
+  if (running) {
+    summary = t('Collecting three fingerprint samples...')
+  } else if (mutation.isError || result.isError) {
+    summary = t('Fingerprint test failed')
+  } else if (highest) {
+    summary = `${highest.model} · ${highest.score.toFixed(3)}`
+  }
   return (
     <>
       {(data || mutation.isError || result.isError) && (
@@ -102,15 +110,7 @@ export function ChannelFingerprintButton(props: {
           }
           onClick={() => setOpen(true)}
         >
-          <span className='truncate'>
-            {running
-              ? t('Collecting three fingerprint samples...')
-              : highest
-                ? `${highest.model} · ${highest.score.toFixed(3)}`
-                : mutation.isError || result.isError
-                  ? t('Fingerprint test failed')
-                  : t('No valid fingerprint samples')}
-          </span>
+          <span className='truncate'>{summary}</span>
         </Button>
       )}
       <Button
