@@ -17,7 +17,51 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var fingerprintRuns sync.Map
+type fingerprintJobKey struct {
+	ChannelID int
+	Model     string
+}
+
+type fingerprintJob struct {
+	Model      string                       `json:"model"`
+	Status     string                       `json:"status"`
+	Reference  string                       `json:"reference"`
+	Candidates []modelfingerprint.Candidate `json:"candidates"`
+	Samples    []modelfingerprint.Sample    `json:"samples"`
+	created    time.Time
+}
+
+// Results are local to this server process and expire after one hour.
+var fingerprintJobs = struct {
+	sync.Mutex
+	jobs map[fingerprintJobKey]*fingerprintJob
+}{jobs: make(map[fingerprintJobKey]*fingerprintJob)}
+
+func GetChannelFingerprint(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	channel, err := model.GetChannelById(id, false)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	if !channel.GetSetting().RelayDetection || !slices.Contains(channel.GetModels(), c.Query("model")) {
+		c.JSON(http.StatusForbidden, gin.H{"success": false, "message": "Fingerprint result is unavailable"})
+		return
+	}
+	fingerprintJobs.Lock()
+	job := fingerprintJobs.jobs[fingerprintJobKey{id, c.Query("model")}]
+	var result *fingerprintJob
+	if job != nil && time.Since(job.created) < time.Hour {
+		snapshot := *job
+		result = &snapshot
+	}
+	fingerprintJobs.Unlock()
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": result})
+}
 
 // TestChannelFingerprint performs a bounded, explicit administrator-triggered probe.
 func TestChannelFingerprint(c *gin.Context) {
@@ -55,11 +99,6 @@ func TestChannelFingerprint(c *gin.Context) {
 		common.ApiError(c, fmt.Errorf("fingerprint probes support OpenAI and Anthropic channels"))
 		return
 	}
-	if _, busy := fingerprintRuns.LoadOrStore(id, true); busy {
-		c.JSON(http.StatusConflict, gin.H{"success": false, "message": "A fingerprint test is already running on this channel"})
-		return
-	}
-	defer fingerprintRuns.Delete(id)
 	userID, err := resolveChannelTestUserID(c)
 	if err != nil {
 		common.ApiError(c, err)
@@ -70,38 +109,109 @@ func TestChannelFingerprint(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	ctx, cancel := context.WithTimeout(c.Request.Context(), 4*time.Minute)
-	defer cancel()
-	samples := make([]modelfingerprint.Sample, 0, len(challenges))
-	for _, challenge := range challenges {
-		if ctx.Err() != nil {
-			break
-		}
-		probeCtx, stop := context.WithTimeout(ctx, 70*time.Second)
-		result := testChannelWithPrompt(probeCtx, channel, userID, input.Model, "", false, challenge.Prompt)
-		stop()
-		if result.localErr != nil || result.newAPIError != nil {
-			samples = append(samples, modelfingerprint.Sample{ID: challenge.ID, Error: "upstream_request_failed"})
-			continue
-		}
-		text, err := fingerprintResponseText(result.responseBody)
-		if err != nil {
-			samples = append(samples, modelfingerprint.Sample{ID: challenge.ID, Error: "invalid_response"})
-			continue
-		}
-		sample, err := modelfingerprint.Rank(text, input.Family, challenge.Count)
+	// Each worker owns a channel snapshot, including mutable multi-key state.
+	channels := make([]*model.Channel, len(challenges))
+	for i := range channels {
+		channels[i], err = common.DeepCopy(channel)
 		if err != nil {
 			common.ApiError(c, err)
 			return
 		}
-		sample.ID = challenge.ID
-		samples = append(samples, sample)
 	}
 	source := "OpenRouter Claude reference (2026-09-20)"
 	if input.Family == "gpt" {
 		source = "ModelTrace GitHub reference (2026-09-20)"
 	}
-	c.JSON(http.StatusOK, gin.H{"success": true, "data": gin.H{"model": input.Model, "reference": source, "candidates": modelfingerprint.Aggregate(samples), "samples": samples}})
+	key := fingerprintJobKey{id, input.Model}
+	fingerprintJobs.Lock()
+	if existing := fingerprintJobs.jobs[key]; existing != nil && existing.Status == "running" {
+		snapshot := *existing
+		fingerprintJobs.Unlock()
+		c.JSON(http.StatusAccepted, gin.H{"success": true, "data": snapshot})
+		return
+	}
+	running := 0
+	for k, job := range fingerprintJobs.jobs {
+		if job.Status == "running" {
+			running++
+		} else if time.Since(job.created) >= time.Hour {
+			delete(fingerprintJobs.jobs, k)
+		}
+	}
+	if running >= 8 {
+		fingerprintJobs.Unlock()
+		c.JSON(http.StatusTooManyRequests, gin.H{"success": false, "message": "Too many fingerprint tests are running"})
+		return
+	}
+	if len(fingerprintJobs.jobs) >= 128 {
+		var oldestKey fingerprintJobKey
+		var oldest *fingerprintJob
+		for k, job := range fingerprintJobs.jobs {
+			if job.Status != "running" && (oldest == nil || job.created.Before(oldest.created)) {
+				oldestKey, oldest = k, job
+			}
+		}
+		if oldest != nil {
+			delete(fingerprintJobs.jobs, oldestKey)
+		}
+	}
+	job := &fingerprintJob{Model: input.Model, Status: "running", Reference: source,
+		Candidates: []modelfingerprint.Candidate{}, Samples: []modelfingerprint.Sample{}, created: time.Now()}
+	fingerprintJobs.jobs[key] = job
+	snapshot := *job
+	fingerprintJobs.Unlock()
+	time.AfterFunc(time.Hour, func() {
+		fingerprintJobs.Lock()
+		defer fingerprintJobs.Unlock()
+		if fingerprintJobs.jobs[key] == job {
+			delete(fingerprintJobs.jobs, key)
+		}
+	})
+	go func() {
+		samples := collectFingerprintSamples(challenges, func(i int, challenge modelfingerprint.Challenge) modelfingerprint.Sample {
+			ctx, cancel := context.WithTimeout(context.Background(), 70*time.Second)
+			defer cancel()
+			result := testChannelWithPrompt(ctx, channels[i], userID, input.Model, "", false, challenge.Prompt)
+			if result.localErr != nil || result.newAPIError != nil {
+				return modelfingerprint.Sample{Error: "upstream_request_failed"}
+			}
+			text, parseErr := fingerprintResponseText(result.responseBody)
+			if parseErr != nil {
+				return modelfingerprint.Sample{Error: "invalid_response"}
+			}
+			sample, rankErr := modelfingerprint.Rank(text, input.Family, challenge.Count)
+			if rankErr != nil {
+				return modelfingerprint.Sample{Error: "ranking_failed"}
+			}
+			return sample
+		})
+		candidates := modelfingerprint.Aggregate(samples)
+		fingerprintJobs.Lock()
+		job.Samples, job.Candidates, job.Status = samples, candidates, "completed"
+		fingerprintJobs.Unlock()
+	}()
+	c.JSON(http.StatusAccepted, gin.H{"success": true, "data": snapshot})
+}
+
+// Preserve challenge order even when individual upstream requests finish out of order.
+func collectFingerprintSamples(challenges []modelfingerprint.Challenge, probe func(int, modelfingerprint.Challenge) modelfingerprint.Sample) []modelfingerprint.Sample {
+	samples := make([]modelfingerprint.Sample, len(challenges))
+	var workers sync.WaitGroup
+	for i, challenge := range challenges {
+		workers.Add(1)
+		go func(i int, challenge modelfingerprint.Challenge) {
+			defer workers.Done()
+			defer func() {
+				if recover() != nil {
+					samples[i] = modelfingerprint.Sample{Error: "upstream_request_failed"}
+				}
+				samples[i].ID = challenge.ID
+			}()
+			samples[i] = probe(i, challenge)
+		}(i, challenge)
+	}
+	workers.Wait()
+	return samples
 }
 
 func fingerprintResponseText(body []byte) (string, error) {

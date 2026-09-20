@@ -16,7 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fingerprint, Loader2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -24,7 +24,11 @@ import { useTranslation } from 'react-i18next'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 
-import { testChannelFingerprint, type FingerprintCandidate } from '../../api'
+import {
+  getChannelFingerprint,
+  testChannelFingerprint,
+  type FingerprintCandidate,
+} from '../../api'
 
 function CandidateRanking(props: { candidates: FingerprintCandidate[] }) {
   const { t } = useTranslation()
@@ -57,6 +61,16 @@ export function ChannelFingerprintButton(props: {
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
+  const client = useQueryClient()
+  const queryKey = ['channel-fingerprint', props.channelId, props.model]
+  const result = useQuery({
+    queryKey,
+    queryFn: () => getChannelFingerprint(props.channelId, props.model),
+    refetchInterval: (query) =>
+      query.state.data?.status === 'running' ? 2000 : false,
+    refetchIntervalInBackground: true,
+    retry: false,
+  })
   const mutation = useMutation({
     mutationFn: () =>
       testChannelFingerprint(
@@ -64,21 +78,52 @@ export function ChannelFingerprintButton(props: {
         props.model,
         props.model.toLowerCase().startsWith('gpt') ? 'gpt' : 'claude'
       ),
+    onMutate: async () => {
+      await client.cancelQueries({ queryKey })
+    },
+    onSuccess: (data) => {
+      client.setQueryData(queryKey, data)
+    },
   })
+  const running = mutation.isPending || result.data?.status === 'running'
+  const data = result.data
+  const highest = data?.candidates?.[0]
   return (
     <>
+      {(data || mutation.isError || result.isError) && (
+        <Button
+          variant='ghost'
+          size='sm'
+          className='max-w-56 truncate text-xs'
+          title={
+            highest
+              ? `${highest.model} · ${highest.score.toFixed(3)}`
+              : t('Test fingerprint')
+          }
+          onClick={() => setOpen(true)}
+        >
+          <span className='truncate'>
+            {running
+              ? t('Collecting three fingerprint samples...')
+              : highest
+                ? `${highest.model} · ${highest.score.toFixed(3)}`
+                : mutation.isError || result.isError
+                  ? t('Fingerprint test failed')
+                  : t('No valid fingerprint samples')}
+          </span>
+        </Button>
+      )}
       <Button
         variant='ghost'
         size='icon-sm'
-        disabled={props.disabled || mutation.isPending}
+        disabled={props.disabled || running || result.isPending}
         aria-label={t('Test fingerprint')}
         title={t('Test fingerprint')}
         onClick={() => {
-          setOpen(true)
           mutation.mutate()
         }}
       >
-        {mutation.isPending ? (
+        {running ? (
           <Loader2 className='size-4 animate-spin' />
         ) : (
           <Fingerprint className='size-4' />
@@ -93,17 +138,17 @@ export function ChannelFingerprintButton(props: {
         )}
         bodyClassName='space-y-4 overflow-y-auto'
       >
-        {mutation.isPending && (
+        {running && (
           <p role='status'>{t('Collecting three fingerprint samples...')}</p>
         )}
-        {mutation.isError && <p role='alert'>{t('Fingerprint test failed')}</p>}
-        {mutation.data && !mutation.isPending && (
+        {(mutation.isError || result.isError) && (
+          <p role='alert'>{t('Fingerprint test failed')}</p>
+        )}
+        {data && !running && (
           <>
-            <p className='text-muted-foreground text-xs'>
-              {mutation.data.reference}
-            </p>
-            <CandidateRanking candidates={mutation.data.candidates} />
-            {mutation.data.samples.map((sample, index) => (
+            <p className='text-muted-foreground text-xs'>{data.reference}</p>
+            <CandidateRanking candidates={data.candidates || []} />
+            {data.samples.map((sample, index) => (
               <details key={sample.id} className='rounded-md border p-3'>
                 <summary>
                   {t('Sample {{number}}', { number: index + 1 })} ·{' '}

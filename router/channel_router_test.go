@@ -50,5 +50,6 @@ func assertChannelRoutePermission(t *testing.T, method string, path string, perm
 }
 
 func TestFingerprintRouteRequiresChannelOperatePermission(t *testing.T) {
+	assertChannelRoutePermission(t, http.MethodGet, "/fingerprint/:id", authz.ChannelOperate, controller.GetChannelFingerprint)
 	assertChannelRoutePermission(t, http.MethodPost, "/fingerprint/:id", authz.ChannelOperate, controller.TestChannelFingerprint)
 }

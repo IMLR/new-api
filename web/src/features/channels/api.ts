@@ -699,6 +699,7 @@ export async function getPrefillGroups(
 
 export type FingerprintCandidate = { model: string; score: number }
 export type ChannelFingerprintResult = {
+  status: 'running' | 'completed'
   model: string
   reference: string
   candidates: FingerprintCandidate[]
@@ -727,6 +728,20 @@ export async function testChannelFingerprint(
   )
   if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || 'Fingerprint test failed')
+  }
+  return response.data.data
+}
+
+export async function getChannelFingerprint(id: number, model: string) {
+  const response = await api.get<{
+    success: boolean
+    data: ChannelFingerprintResult | null
+  }>(
+    `/api/channel/fingerprint/${id}`,
+    channelActionConfig({ params: { model } })
+  )
+  if (!response.data.success) {
+    throw new Error('Fingerprint test failed')
   }
   return response.data.data
 }

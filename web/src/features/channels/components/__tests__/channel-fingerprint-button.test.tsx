@@ -61,70 +61,75 @@ const { ChannelFingerprintButton } =
   await import('../dialogs/channel-fingerprint-button')
 after(() => window.happyDOM.abort())
 
-test('fingerprint action disables duplicate clicks and renders returned candidates', async () => {
+test('fingerprint runs in background and cached results open without a paid request', async () => {
   const container = document.createElement('div')
   document.body.append(container)
   const root = createRoot(container)
   const client = new QueryClient({
-    defaultOptions: { mutations: { retry: false } },
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   const previous = api.defaults.adapter
-  let finish: (() => void) | undefined
-  const requested: string[] = []
-  api.defaults.adapter = (config) =>
-    new Promise((resolve) => {
-      requested.push(config.url || '')
-      finish = () =>
-        resolve({
-          config,
-          status: 200,
-          statusText: 'OK',
-          headers: {},
-          data: {
-            success: true,
-            data: {
-              model: 'gpt-6-astra',
-              reference: 'GPT reference',
-              candidates: [{ model: 'gpt-5.6-luna', score: 1.8 }],
-              samples: [],
-            },
-          },
-        })
-    })
+  const queryKey = ['channel-fingerprint', 11, 'gpt-6-astra']
+  const completed = {
+    status: 'completed' as const,
+    model: 'gpt-6-astra',
+    reference: 'GPT reference',
+    candidates: [{ model: 'gpt-5.6-luna', score: 1.8 }],
+    samples: [],
+  }
+  let current:
+    | typeof completed
+    | { status: 'running'; candidates: []; samples: [] }
+    | null = null
+  let posts = 0
+  api.defaults.adapter = async (config) => {
+    if (config.method === 'post') {
+      posts++
+      current = { status: 'running', candidates: [], samples: [] }
+    }
+    return {
+      config,
+      status: 200,
+      statusText: 'OK',
+      headers: {},
+      data: { success: true, data: current },
+    }
+  }
   notifyManager.setScheduler((callback) => callback())
+  const render = () =>
+    root.render(
+      <QueryClientProvider client={client}>
+        <ChannelFingerprintButton channelId={11} model='gpt-6-astra' />
+      </QueryClientProvider>
+    )
   try {
-    await act(async () => {
-      root.render(
-        <QueryClientProvider client={client}>
-          <ChannelFingerprintButton channelId={11} model='gpt-6-astra' />
-        </QueryClientProvider>
-      )
-    })
+    await client.fetchQuery({ queryKey, queryFn: async () => null })
+    await act(async () => render())
     const button = container.querySelector<HTMLButtonElement>(
       '[aria-label="Test fingerprint"]'
     )
     assert.ok(button)
     await act(async () => button.click())
+    assert.equal(posts, 1)
     assert.equal(button.disabled, true)
-    assert.deepEqual(requested, ['/api/channel/fingerprint/11'])
-    assert.ok(finish)
-    const completed = new Promise<void>((resolve) => {
-      const unsubscribe = client.getMutationCache().subscribe((event) => {
-        if (event.mutation?.state.status === 'success') {
-          unsubscribe()
-          resolve()
-        }
-      })
-    })
+    assert.equal(document.querySelector('[role="dialog"]'), null)
+    // Closing the containing channel modal unmounts this component.
+    await act(async () => root.render(null))
+    current = completed
+    await client.invalidateQueries({ queryKey })
+    await act(async () => render())
     await act(async () => {
-      if (finish) {
-        finish()
-      }
-      await completed
+      await client.refetchQueries({ queryKey })
     })
-    assert.equal(button.disabled, false)
-    assert.ok(document.body.textContent?.includes('gpt-5.6-luna'))
-    assert.ok(document.body.textContent?.includes('1.800'))
+    const candidate = Array.from(container.querySelectorAll('button')).find(
+      (item) => item.textContent?.includes('gpt-5.6-luna')
+    )
+    assert.ok(candidate)
+    assert.ok(candidate.textContent?.includes('1.800'))
+    await act(async () => candidate.click())
+    assert.ok(document.querySelector('[role="dialog"]'))
+    assert.ok(document.body.textContent?.includes('GPT reference'))
+    assert.equal(posts, 1)
   } finally {
     await act(async () => root.unmount())
     container.remove()
