@@ -20,6 +20,7 @@ import assert from 'node:assert/strict'
 import { after, test } from 'node:test'
 
 import { Window } from 'happy-dom'
+import type { ChannelFormValues } from '../../lib/channel-form'
 
 const window = new Window()
 for (const key of [
@@ -58,7 +59,7 @@ const { CHANNEL_FORM_DEFAULT_VALUES } = await import('../../lib/channel-form')
 after(() => window.happyDOM.abort())
 
 function SettingsFixture(props: { type: number }) {
-  const form = useForm({
+  const form = useForm<ChannelFormValues>({
     defaultValues: {
       ...CHANNEL_FORM_DEFAULT_VALUES,
       type: props.type,
