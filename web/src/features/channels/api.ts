@@ -725,7 +725,8 @@ export async function testChannelFingerprint(
     { model, family },
     channelActionConfig({ timeout: 250000 })
   )
-  if (!response.data.success || !response.data.data)
+  if (!response.data.success || !response.data.data) {
     throw new Error(response.data.message || 'Fingerprint test failed')
+  }
   return response.data.data
 }
