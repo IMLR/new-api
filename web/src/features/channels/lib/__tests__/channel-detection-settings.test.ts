@@ -50,7 +50,7 @@ test('removing a model drops its endpoint and changing provider clears incompati
     model_endpoints: { removed: 'openai-response' as const },
   }
   assert.deepEqual(
-    JSON.parse(transformFormDataToCreatePayload(values).channel.setting!)
+    JSON.parse(transformFormDataToCreatePayload(values).channel.setting || '{}')
       .model_endpoints,
     {}
   )
@@ -60,7 +60,7 @@ test('removing a model drops its endpoint and changing provider clears incompati
         ...values,
         type: 14,
         models: 'removed',
-      }).channel.setting!
+      }).channel.setting || '{}'
     ).model_endpoints,
     {}
   )

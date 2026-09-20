@@ -81,12 +81,12 @@ func TestChannelFingerprint(c *gin.Context) {
 		result := testChannelWithPrompt(probeCtx, channel, userID, input.Model, "", false, challenge.Prompt)
 		stop()
 		if result.localErr != nil || result.newAPIError != nil {
-			samples = append(samples, modelfingerprint.Sample{Error: "upstream_request_failed"})
+			samples = append(samples, modelfingerprint.Sample{ID: challenge.ID, Error: "upstream_request_failed"})
 			continue
 		}
 		text, err := fingerprintResponseText(result.responseBody)
 		if err != nil {
-			samples = append(samples, modelfingerprint.Sample{Error: "invalid_response"})
+			samples = append(samples, modelfingerprint.Sample{ID: challenge.ID, Error: "invalid_response"})
 			continue
 		}
 		sample, err := modelfingerprint.Rank(text, input.Family, challenge.Count)
@@ -94,6 +94,7 @@ func TestChannelFingerprint(c *gin.Context) {
 			common.ApiError(c, err)
 			return
 		}
+		sample.ID = challenge.ID
 		samples = append(samples, sample)
 	}
 	source := "OpenRouter Claude reference (2026-09-20)"

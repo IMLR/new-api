@@ -80,7 +80,7 @@ test('OpenAI channel exposes a detection switch and a per-model endpoint selecto
     await act(async () => {
       root.render(<SettingsFixture type={1} />)
     })
-    const toggle = container.querySelector<HTMLElement>('[role="switch"]')!
+    const toggle = container.querySelector<HTMLElement>('[role="switch"]')
     assert.ok(toggle)
     assert.equal(toggle.getAttribute('aria-checked'), 'false')
     await act(async () => toggle.click())

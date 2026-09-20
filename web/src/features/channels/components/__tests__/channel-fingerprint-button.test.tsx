@@ -98,7 +98,8 @@ test('fingerprint action disables duplicate clicks and renders returned candidat
     })
     const button = container.querySelector<HTMLButtonElement>(
       '[aria-label="Test fingerprint"]'
-    )!
+    )
+    assert.ok(button)
     await act(async () => button.click())
     assert.equal(button.disabled, true)
     assert.deepEqual(requested, ['/api/channel/fingerprint/11'])
@@ -112,7 +113,9 @@ test('fingerprint action disables duplicate clicks and renders returned candidat
       })
     })
     await act(async () => {
-      finish!()
+      if (finish) {
+        finish()
+      }
       await completed
     })
     assert.equal(button.disabled, false)

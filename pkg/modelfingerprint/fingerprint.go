@@ -38,10 +38,12 @@ type Candidate struct {
 	Score float64 `json:"score"`
 }
 type Challenge struct {
+	ID     string `json:"id"`
 	Prompt string `json:"prompt"`
 	Count  int    `json:"expected_count"`
 }
 type Sample struct {
+	ID         string      `json:"id"`
 	Text       string      `json:"text"`
 	Count      int         `json:"count"`
 	Candidates []Candidate `json:"candidates,omitempty"`

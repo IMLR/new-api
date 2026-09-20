@@ -24,13 +24,13 @@ import { useTranslation } from 'react-i18next'
 import { Dialog } from '@/components/dialog'
 import { Button } from '@/components/ui/button'
 
-import { testChannelFingerprint } from '../../api'
-import type { FingerprintCandidate } from '../../api'
+import { testChannelFingerprint, type FingerprintCandidate } from '../../api'
 
 function CandidateRanking(props: { candidates: FingerprintCandidate[] }) {
   const { t } = useTranslation()
-  if (!props.candidates.length)
+  if (!props.candidates.length) {
     return <p>{t('No valid fingerprint samples')}</p>
+  }
   return (
     <ol className='space-y-1'>
       {props.candidates.map((candidate, index) => (
@@ -104,7 +104,7 @@ export function ChannelFingerprintButton(props: {
             </p>
             <CandidateRanking candidates={mutation.data.candidates} />
             {mutation.data.samples.map((sample, index) => (
-              <details key={index} className='rounded-md border p-3'>
+              <details key={sample.id} className='rounded-md border p-3'>
                 <summary>
                   {t('Sample {{number}}', { number: index + 1 })} ·{' '}
                   {sample.count} {t('integers')}

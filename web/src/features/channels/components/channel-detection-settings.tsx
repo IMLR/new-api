@@ -16,8 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import type { UseFormReturn } from 'react-hook-form'
-import { useWatch } from 'react-hook-form'
+import { useWatch, type UseFormReturn } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 
 import {
@@ -44,7 +43,9 @@ export function ChannelDetectionSettings(props: {
   const { t } = useTranslation()
   const type = useWatch({ control: props.form.control, name: 'type' })
   const models = useWatch({ control: props.form.control, name: 'models' })
-  if (type !== 1 && type !== 14) return null
+  if (type !== 1 && type !== 14) {
+    return null
+  }
   const names = [
     ...new Set(
       (models || '')
@@ -99,14 +100,18 @@ export function ChannelDetectionSettings(props: {
                     <Select
                       value={field.value?.[model] || 'auto'}
                       onValueChange={(value) => {
-                        if (!value) return
+                        if (!value) {
+                          return
+                        }
                         const endpoints = { ...field.value }
-                        if (value === 'auto') delete endpoints[model]
-                        else if (
+                        if (value === 'auto') {
+                          delete endpoints[model]
+                        } else if (
                           value === 'openai' ||
                           value === 'openai-response'
-                        )
+                        ) {
                           endpoints[model] = value
+                        }
                         field.onChange(endpoints)
                       }}
                     >

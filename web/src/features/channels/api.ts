@@ -703,6 +703,7 @@ export type ChannelFingerprintResult = {
   reference: string
   candidates: FingerprintCandidate[]
   samples: {
+    id: string
     text: string
     count: number
     candidates?: FingerprintCandidate[]
