@@ -95,6 +95,57 @@ export type CodexOAuthCompleteResponse = {
   }
 }
 
+export type ClineQuotaModel = {
+  model: string
+  upstream_model?: string
+  cooling_down?: boolean
+  reset_at?: string
+  reset_in_seconds?: number
+  reason?: string
+}
+
+export type ClineQuotaData = {
+  channel_id?: number
+  channel_name?: string
+  account?: {
+    id?: string
+    email?: string
+    displayName?: string
+  }
+  account_error?: string
+  plan?: {
+    active?: boolean
+    type?: string
+    name?: string
+    display_name?: string
+    status?: string
+    current_period_end?: string
+  }
+  credential?: {
+    expires_at?: string
+    expires_in_seconds?: number
+    auto_refresh?: boolean
+  }
+  models?: ClineQuotaModel[]
+  checked_at?: string
+}
+
+export type ClineQuotaResponse = {
+  success: boolean
+  message?: string
+  data?: ClineQuotaData
+}
+
+export type ClineQuotaProbeResponse = {
+  success: boolean
+  message?: string
+  data?: {
+    status_code?: number
+    latency_ms?: number
+    model?: ClineQuotaModel
+  }
+}
+
 // ============================================================================
 // Base Channel CRUD Operations
 // ============================================================================
@@ -397,6 +448,28 @@ export async function resetCodexUsage(
   const res = await api.post(
     `/api/channel/${channelId}/codex/usage/reset`,
     {},
+    channelActionConfig({ disableDuplicate: true })
+  )
+  return res.data
+}
+
+export async function getClineQuota(
+  channelId: number
+): Promise<ClineQuotaResponse> {
+  const res = await api.get(
+    `/api/channel/${channelId}/cline/quota`,
+    channelActionConfig({ disableDuplicate: true })
+  )
+  return res.data
+}
+
+export async function probeClineQuota(
+  channelId: number,
+  model: string
+): Promise<ClineQuotaProbeResponse> {
+  const res = await api.post(
+    `/api/channel/${channelId}/cline/quota/probe`,
+    { model },
     channelActionConfig({ disableDuplicate: true })
   )
   return res.data

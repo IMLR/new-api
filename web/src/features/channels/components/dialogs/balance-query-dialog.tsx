@@ -28,9 +28,15 @@ import { IconBadge } from '@/components/ui/icon-badge'
 import { formatCurrencyFromUSD } from '@/lib/currency'
 import { formatTimestampToDate } from '@/lib/format'
 
-import { getCodexUsage, updateChannelBalance } from '../../api'
+import {
+  getClineQuota,
+  getCodexUsage,
+  updateChannelBalance,
+  type ClineQuotaResponse,
+} from '../../api'
 import { channelsQueryKeys } from '../../lib'
 import { useChannels } from '../channels-provider'
+import { ClineQuotaDialog } from './cline-quota-dialog'
 import {
   CodexUsageDialog,
   type CodexUsageDialogData,
@@ -55,8 +61,11 @@ export function BalanceQueryDialog({
   )
   const [codexUsageResponse, setCodexUsageResponse] =
     useState<CodexUsageDialogData | null>(null)
+  const [clineQuotaResponse, setClineQuotaResponse] =
+    useState<ClineQuotaResponse | null>(null)
 
   const isCodex = currentRow?.type === 57
+  const isCline = currentRow?.type === 60
 
   const handleQueryCodexUsage = async () => {
     const row = currentRow
@@ -77,12 +86,36 @@ export function BalanceQueryDialog({
     }
   }
 
+  const handleQueryClineQuota = async () => {
+    const row = currentRow
+    if (!row) return
+    setIsQuerying(true)
+    try {
+      const res = await getClineQuota(row.id)
+      if (!res.success) {
+        throw new Error(res.message || t('Failed to fetch usage'))
+      }
+      setClineQuotaResponse(res)
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error ? error.message : t('Failed to fetch usage')
+      )
+    } finally {
+      setIsQuerying(false)
+    }
+  }
+
   useEffect(() => {
-    if (!isCodex) return
     if (!open) return
-    handleQueryCodexUsage()
+    if (isCodex) {
+      handleQueryCodexUsage()
+      return
+    }
+    if (isCline) {
+      handleQueryClineQuota()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, isCodex])
+  }, [open, isCodex, isCline])
 
   if (!currentRow) return null
 
@@ -125,6 +158,7 @@ export function BalanceQueryDialog({
     setBalance(null)
     setBalanceUpdatedTime(null)
     setCodexUsageResponse(null)
+    setClineQuotaResponse(null)
     onOpenChange(false)
   }
 
@@ -151,6 +185,22 @@ export function BalanceQueryDialog({
         channelId={currentRow.id}
         response={codexUsageResponse}
         onRefresh={handleQueryCodexUsage}
+        isRefreshing={isQuerying}
+      />
+    )
+  }
+
+  if (isCline) {
+    return (
+      <ClineQuotaDialog
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) handleClose()
+        }}
+        channelName={currentRow.name}
+        channelId={currentRow.id}
+        response={clineQuotaResponse}
+        onRefresh={handleQueryClineQuota}
         isRefreshing={isQuerying}
       />
     )

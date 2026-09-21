@@ -5253,6 +5253,25 @@
     "Zero retention": "Không lưu dữ liệu",
     "Zhipu": "Zhipu",
     "Zhipu V4": "Zhipu V4",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "Cline Quota": "Cline Quota",
+    "Free quota windows for this account.": "Free quota windows for this account.",
+    "Model quota": "Model quota",
+    "Cooling down": "Cooling down",
+    "Resets at": "Resets at",
+    "Resets in": "Resets in",
+    "Check quota": "Check quota",
+    "Checking...": "Checking...",
+    "Quota check failed": "Quota check failed",
+    "Checking quota spends one free request for this model.": "Checking quota spends one free request for this model.",
+    "No models configured for this channel.": "No models configured for this channel.",
+    "Last checked": "Last checked",
+    "Credential expiry": "Credential expiry",
+    "Renews automatically": "Renews automatically",
+    "ClinePass subscription": "ClinePass subscription",
+    "No subscription": "No subscription",
+    "Account details unavailable": "Account details unavailable",
+    "Click to view Cline quota": "Click to view Cline quota",
+    "Valid until": "Valid until"
   }
 }

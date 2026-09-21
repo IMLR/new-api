@@ -5253,6 +5253,25 @@
     "Zero retention": "零数据保留",
     "Zhipu": "智谱",
     "Zhipu V4": "智谱 V4",
-    "Zoom": "缩放"
+    "Zoom": "缩放",
+    "Cline Quota": "免费额度",
+    "Free quota windows for this account.": "当前账号的免费额度窗口。",
+    "Model quota": "模型额度",
+    "Cooling down": "冷却中",
+    "Resets at": "重置于",
+    "Resets in": "剩余",
+    "Check quota": "检测额度",
+    "Checking...": "检测中…",
+    "Quota check failed": "额度检测失败",
+    "Checking quota spends one free request for this model.": "检测额度会为这个模型消耗一次免费调用。",
+    "No models configured for this channel.": "这个渠道还没有配置模型。",
+    "Last checked": "最近读取",
+    "Credential expiry": "凭证到期时间",
+    "Renews automatically": "自动续期",
+    "ClinePass subscription": "ClinePass 套餐",
+    "No subscription": "无订阅",
+    "Account details unavailable": "账号信息读取失败",
+    "Click to view Cline quota": "点击查看免费额度",
+    "Valid until": "有效期至"
   }
 }
