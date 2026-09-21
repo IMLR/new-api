@@ -24,6 +24,7 @@ import { ClaudeSettingsCard } from './claude-settings-card'
 import { GeminiSettingsCard } from './gemini-settings-card'
 import { GlobalSettingsCard } from './global-settings-card'
 import { GrokSettingsCard } from './grok-settings-card'
+import { RatioSettingsCard } from './ratio-settings-card'
 import { RoutingReliabilitySection } from './routing-reliability-section'
 
 function formatJsonForEditor(value: string, fallback: string) {
@@ -36,7 +37,45 @@ function formatJsonForEditor(value: string, fallback: string) {
   }
 }
 
+const getModelPricingDefaults = (settings: ModelSettings) => ({
+  ModelPrice: settings.ModelPrice,
+  ModelRatio: settings.ModelRatio,
+  CacheRatio: settings.CacheRatio,
+  CreateCacheRatio: settings.CreateCacheRatio,
+  CompletionRatio: settings.CompletionRatio,
+  ImageRatio: settings.ImageRatio,
+  AudioRatio: settings.AudioRatio,
+  AudioCompletionRatio: settings.AudioCompletionRatio,
+  ExposeRatioEnabled: settings.ExposeRatioEnabled,
+  BillingMode: settings['billing_setting.billing_mode'],
+  BillingExpr: settings['billing_setting.billing_expr'],
+})
+
+const getGroupPricingDefaults = (settings: ModelSettings) => ({
+  TopupGroupRatio: settings.TopupGroupRatio,
+  GroupRatio: settings.GroupRatio,
+  UserUsableGroups: settings.UserUsableGroups,
+  GroupGroupRatio: settings.GroupGroupRatio,
+  AutoGroups: settings.AutoGroups,
+  DefaultUseAutoGroup: settings.DefaultUseAutoGroup,
+  GroupSpecialUsableGroup:
+    settings['group_ratio_setting.group_special_usable_group'],
+})
+
 const MODELS_SECTIONS = [
+  {
+    id: 'model-pricing',
+    titleKey: 'Model Pricing',
+    build: (settings: ModelSettings) => (
+      <RatioSettingsCard
+        titleKey='Model Pricing'
+        modelDefaults={getModelPricingDefaults(settings)}
+        groupDefaults={getGroupPricingDefaults(settings)}
+        toolPricesDefault={settings['tool_price_setting.prices']}
+        visibleTabs={['models', 'unset-models', 'tool-prices', 'upstream-sync']}
+      />
+    ),
+  },
   {
     id: 'global',
     titleKey: 'Global Model Configuration',

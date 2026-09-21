@@ -20,7 +20,6 @@ import {
   Activity,
   Box,
   FileText,
-  FlaskConical,
   Key,
   LayoutDashboard,
   ListTodo,
@@ -49,11 +48,6 @@ export function useSidebarData(): SidebarData {
         id: 'general',
         title: t('General'),
         items: [
-          {
-            title: t('Playground'),
-            url: '/playground',
-            icon: FlaskConical,
-          },
           {
             title: t('Overview'),
             url: '/dashboard/overview',

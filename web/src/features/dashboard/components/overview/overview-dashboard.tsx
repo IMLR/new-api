@@ -82,7 +82,6 @@ const SETUP_GUIDE_CODE_PATTERN = [
 
 type DashboardActionPath =
   | '/keys'
-  | '/playground'
   | '/channels'
   | '/usage-logs'
   | '/models'
@@ -467,7 +466,6 @@ export function OverviewDashboard() {
     boolean | null
   >(() => getSavedSetupGuideExpanded())
 
-  const requestCount = Number(user?.request_count ?? 0)
   const isAdmin = Boolean(user?.role && user.role >= ROLE.ADMIN)
 
   const apiKeysQuery = useQuery({
@@ -502,15 +500,8 @@ export function OverviewDashboard() {
         icon: KeyRound,
         completed: Boolean(preferredKey),
       },
-      {
-        title: t('Send a request'),
-        description: t('Verify routing with Playground or your client'),
-        to: '/playground',
-        icon: TerminalSquare,
-        completed: requestCount > 0,
-      },
     ],
-    [preferredKey, requestCount, t]
+    [preferredKey, t]
   )
 
   const quickActions = useMemo<QuickAction[]>(

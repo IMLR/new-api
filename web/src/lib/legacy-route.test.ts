@@ -31,7 +31,6 @@ describe('legacy frontend route migration', () => {
       '/console/deployment': '/models/deployments',
       '/console/channel': '/channels',
       '/console/token': '/keys',
-      '/console/playground': '/playground',
       '/console/personal': '/profile',
       '/console/log': '/usage-logs',
       '/console/midjourney': '/usage-logs/drawing',
@@ -59,7 +58,7 @@ describe('legacy frontend route migration', () => {
     const settingsTabs = {
       operation: '/system-settings/operations/behavior',
 
-      ratio: '/system-settings/billing/model-pricing',
+      ratio: '/system-settings/models/model-pricing',
       ratelimit: '/system-settings/security/rate-limit',
       models: '/system-settings/models/global',
       'model-deployment': '/system-settings/models/model-deployment',
