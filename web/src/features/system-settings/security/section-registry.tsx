@@ -16,30 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { RateLimitSection } from '../request-limits/rate-limit-section'
 import { SSRFSection } from '../request-limits/ssrf-section'
 import { TokenLimitSection } from '../request-limits/token-limit-section'
 import type { SecuritySettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 
 const SECURITY_SECTIONS = [
-  {
-    id: 'rate-limit',
-    titleKey: 'Rate Limiting',
-    build: (settings: SecuritySettings) => (
-      <RateLimitSection
-        defaultValues={{
-          ModelRequestRateLimitEnabled: settings.ModelRequestRateLimitEnabled,
-          ModelRequestRateLimitCount: settings.ModelRequestRateLimitCount,
-          ModelRequestRateLimitSuccessCount:
-            settings.ModelRequestRateLimitSuccessCount,
-          ModelRequestRateLimitDurationMinutes:
-            settings.ModelRequestRateLimitDurationMinutes,
-          ModelRequestRateLimitGroup: settings.ModelRequestRateLimitGroup,
-        }}
-      />
-    ),
-  },
   {
     id: 'ssrf',
     titleKey: 'SSRF Protection',
@@ -85,7 +67,7 @@ const securityRegistry = createSectionRegistry<
   SecuritySettings
 >({
   sections: SECURITY_SECTIONS,
-  defaultSection: 'rate-limit',
+  defaultSection: 'ssrf',
   basePath: '/system-settings/security',
   urlStyle: 'path',
 })

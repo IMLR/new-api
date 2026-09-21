@@ -33,8 +33,8 @@ describe('legacy frontend route migration', () => {
       '/console/token': '/keys',
       '/console/personal': '/profile',
       '/console/log': '/usage-logs',
-      '/console/midjourney': '/usage-logs/drawing',
-      '/console/task': '/usage-logs/task',
+      '/console/midjourney': '/usage-logs',
+      '/console/task': '/usage-logs',
       '/console/chat/42': '/chat/42',
     }
 

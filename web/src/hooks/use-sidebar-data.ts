@@ -22,22 +22,24 @@ import {
   FileText,
   Key,
   LayoutDashboard,
-  ListTodo,
   Radio,
   ServerCog,
-  Settings,
   User,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { type SidebarData } from '@/components/layout/types'
+import { getAuthSectionNavItems } from '@/features/system-settings/auth/section-registry'
+import { getModelsSectionNavItems } from '@/features/system-settings/models/section-registry'
+import { getOperationsSectionNavItems } from '@/features/system-settings/operations/section-registry'
+import { getSecuritySectionNavItems } from '@/features/system-settings/security/section-registry'
+import { getSiteSectionNavItems } from '@/features/system-settings/site/section-registry'
 import { ROLE } from '@/lib/roles'
 
 /**
- * Root navigation groups for the application sidebar.
- *
- * These are shown when the URL does not match any nested sidebar view
- * registered in `layout/lib/sidebar-view-registry.ts`.
+ * Root navigation groups for the application sidebar. Personal build:
+ * single-level sidebar, settings sections are inlined as the last group
+ * instead of a separate drill-in view.
  */
 export function useSidebarData(): SidebarData {
   const { t } = useTranslation()
@@ -65,15 +67,8 @@ export function useSidebarData(): SidebarData {
           },
           {
             title: t('Usage Logs'),
-            url: '/usage-logs/common',
+            url: '/usage-logs',
             icon: FileText,
-          },
-          {
-            title: t('Task Logs'),
-            url: '/usage-logs/task',
-            activeUrls: ['/usage-logs/drawing'],
-            configUrls: ['/usage-logs/drawing', '/usage-logs/task'],
-            icon: ListTodo,
           },
         ],
       },
@@ -108,12 +103,17 @@ export function useSidebarData(): SidebarData {
             icon: ServerCog,
             requiredRole: ROLE.SUPER_ADMIN,
           },
-          {
-            title: t('System Settings'),
-            url: '/system-settings/site',
-            activeUrls: ['/system-settings'],
-            icon: Settings,
-          },
+        ],
+      },
+      {
+        id: 'settings',
+        title: t('Settings'),
+        items: [
+          ...getSiteSectionNavItems(t),
+          ...getAuthSectionNavItems(t),
+          ...getModelsSectionNavItems(t),
+          ...getSecuritySectionNavItems(t),
+          ...getOperationsSectionNavItems(t),
         ],
       },
     ],
