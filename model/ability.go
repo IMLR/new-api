@@ -60,68 +60,23 @@ func GetAllEnableAbilities() []Ability {
 	return abilities
 }
 
-func getPriority(group string, model string, retry int) (int, error) {
-
-	var priorities []int
-	err := DB.Model(&Ability{}).
-		Select("DISTINCT(priority)").
-		Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true).
-		Order("priority DESC").              // 按优先级降序排序
-		Pluck("priority", &priorities).Error // Pluck用于将查询的结果直接扫描到一个切片中
-
-	if err != nil {
-		// 处理错误
-		return 0, err
-	}
-
-	if len(priorities) == 0 {
-		// 如果没有查询到优先级，则返回错误
-		return 0, errors.New("数据库一致性被破坏")
-	}
-
-	// 确定要使用的优先级
-	var priorityToUse int
-	if retry >= len(priorities) {
-		// 如果重试次数大于优先级数，则使用最小的优先级
-		priorityToUse = priorities[len(priorities)-1]
-	} else {
-		priorityToUse = priorities[retry]
-	}
-	return priorityToUse, nil
-}
-
-func getChannelQuery(group string, model string, retry int) (*gorm.DB, error) {
-	maxPrioritySubQuery := DB.Model(&Ability{}).Select("MAX(priority)").Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true)
-	channelQuery := DB.Where(commonGroupCol+" = ? and model = ? and enabled = ? and priority = (?)", group, model, true, maxPrioritySubQuery)
-	if retry != 0 {
-		priority, err := getPriority(group, model, retry)
-		if err != nil {
-			return nil, err
-		} else {
-			channelQuery = DB.Where(commonGroupCol+" = ? and model = ? and enabled = ? and priority = ?", group, model, true, priority)
-		}
-	}
-
-	return channelQuery, nil
-}
-
-func GetChannel(group string, model string, retry int, requestPath string) (*Channel, error) {
+// GetChannel selects a channel straight from the database for instances without
+// the memory cache. Candidates that are cooling down for the model or already
+// tried by this request are skipped, and the highest priority layer among the
+// remaining candidates wins, so retries consume one layer before dropping to
+// the next one.
+func GetChannel(group string, model string, retry int, requestPath string, usedChannelIds []int) (*Channel, error) {
 	var abilities []Ability
 
-	var err error = nil
-	channelQuery, err := getChannelQuery(group, model, retry)
-	if err != nil {
-		return nil, err
-	}
-	if common.UsingMainDatabase(common.DatabaseTypeSQLite) || common.UsingMainDatabase(common.DatabaseTypePostgreSQL) {
-		err = channelQuery.Order("weight DESC").Find(&abilities).Error
-	} else {
-		err = channelQuery.Order("weight DESC").Find(&abilities).Error
-	}
+	err := DB.Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true).
+		Order("weight DESC").
+		Find(&abilities).Error
 	if err != nil {
 		return nil, err
 	}
 	abilities = filterAbilitiesByRequestPathAndModel(abilities, requestPath, model)
+	abilities = filterUnavailableAbilities(abilities, model, usedChannelIds)
+	abilities = highestPriorityAbilities(abilities)
 	channel := Channel{}
 	if len(abilities) > 0 {
 		// Randomly choose one
@@ -191,6 +146,55 @@ func filterAbilitiesByRequestPathAndModel(abilities []Ability, requestPath strin
 		}
 	}
 	return filtered
+}
+
+// filterUnavailableAbilities applies the per-model quota cooldown and the
+// channels already tried by the current request to the DB selection path. The
+// original list is kept when everything is filtered out, so the caller still
+// reports the upstream error instead of a missing channel.
+func filterUnavailableAbilities(abilities []Ability, model string, usedChannelIds []int) []Ability {
+	if len(abilities) == 0 {
+		return abilities
+	}
+	used := toChannelIdSet(usedChannelIds)
+	filtered := make([]Ability, 0, len(abilities))
+	for _, ability := range abilities {
+		if channelModelAvailable(ability.ChannelId, model, used) {
+			filtered = append(filtered, ability)
+		}
+	}
+	if len(filtered) == 0 {
+		return abilities
+	}
+	return filtered
+}
+
+// highestPriorityAbilities keeps the abilities that share the highest priority,
+// which is the layer the selection consumes first.
+func highestPriorityAbilities(abilities []Ability) []Ability {
+	if len(abilities) == 0 {
+		return abilities
+	}
+	highest := abilityPriority(abilities[0])
+	for _, ability := range abilities[1:] {
+		if priority := abilityPriority(ability); priority > highest {
+			highest = priority
+		}
+	}
+	filtered := make([]Ability, 0, len(abilities))
+	for _, ability := range abilities {
+		if abilityPriority(ability) == highest {
+			filtered = append(filtered, ability)
+		}
+	}
+	return filtered
+}
+
+func abilityPriority(ability Ability) int64 {
+	if ability.Priority == nil {
+		return 0
+	}
+	return *ability.Priority
 }
 
 func (channel *Channel) AddAbilities(tx *gorm.DB) error {

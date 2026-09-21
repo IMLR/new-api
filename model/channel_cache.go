@@ -111,10 +111,15 @@ func SyncChannelCache(frequency int) {
 	}
 }
 
-func GetRandomSatisfiedChannel(group string, model string, retry int, requestPath string) (*Channel, error) {
+// GetRandomSatisfiedChannel picks a channel for the given group and model.
+// retry is the attempt index of the current request and only bounds the caller
+// loop: the priority layer is derived from the candidates that are still
+// available, so a retry stays inside the current layer until every account
+// there is cooling down or already tried by this request.
+func GetRandomSatisfiedChannel(group string, model string, retry int, requestPath string, usedChannelIds []int) (*Channel, error) {
 	// if memory cache is disabled, get channel directly from database
 	if !common.MemoryCacheEnabled {
-		return GetChannel(group, model, retry, requestPath)
+		return GetChannel(group, model, retry, requestPath, usedChannelIds)
 	}
 
 	channelSyncLock.RLock()
@@ -133,6 +138,10 @@ func GetRandomSatisfiedChannel(group string, model string, retry int, requestPat
 		return nil, nil
 	}
 
+	// Skip accounts that reported a quota window for this model and channels
+	// already tried by the current request.
+	channels = filterUnavailableChannels(channels, model, usedChannelIds)
+
 	if len(channels) == 1 {
 		if channel, ok := channelsIDM[channels[0]]; ok {
 			return channel, nil
@@ -140,36 +149,29 @@ func GetRandomSatisfiedChannel(group string, model string, retry int, requestPat
 		return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channels[0])
 	}
 
-	uniquePriorities := make(map[int]bool)
-	for _, channelId := range channels {
-		if channel, ok := channelsIDM[channelId]; ok {
-			uniquePriorities[int(channel.GetPriority())] = true
-		} else {
-			return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channelId)
-		}
-	}
-	var sortedUniquePriorities []int
-	for priority := range uniquePriorities {
-		sortedUniquePriorities = append(sortedUniquePriorities, priority)
-	}
-	sort.Sort(sort.Reverse(sort.IntSlice(sortedUniquePriorities)))
-
-	if retry >= len(uniquePriorities) {
-		retry = len(uniquePriorities) - 1
-	}
-	targetPriority := int64(sortedUniquePriorities[retry])
-
-	// get the priority for the given retry number
+	// The highest priority layer that still has a candidate wins, so a retry
+	// consumes the remaining accounts of the current layer before dropping to a
+	// lower priority layer. With a shared free account pool on top and a paid
+	// fallback below, this keeps the paid route unused while any free account can
+	// still serve the model. Accounts of the current layer are skipped by the
+	// cooldown and used-channel filter above, so each retry picks a new one.
+	var targetPriority int64
 	var sumWeight = 0
 	var targetChannels []*Channel
 	for _, channelId := range channels {
-		if channel, ok := channelsIDM[channelId]; ok {
-			if channel.GetPriority() == targetPriority {
-				sumWeight += channel.GetWeight()
-				targetChannels = append(targetChannels, channel)
-			}
-		} else {
+		channel, ok := channelsIDM[channelId]
+		if !ok {
 			return nil, fmt.Errorf("数据库一致性错误，渠道# %d 不存在，请联系管理员修复", channelId)
+		}
+		priority := channel.GetPriority()
+		if len(targetChannels) == 0 || priority > targetPriority {
+			targetPriority = priority
+			targetChannels = targetChannels[:0]
+			sumWeight = 0
+		}
+		if priority == targetPriority {
+			sumWeight += channel.GetWeight()
+			targetChannels = append(targetChannels, channel)
 		}
 	}
 
