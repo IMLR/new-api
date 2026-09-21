@@ -1,6 +1,7 @@
 package model
 
 import (
+	"sort"
 	"sync"
 	"time"
 )
@@ -13,7 +14,21 @@ type channelModelCooldownKey struct {
 
 type channelModelCooldownStore struct {
 	mu      sync.RWMutex
-	expires map[channelModelCooldownKey]time.Time
+	expires map[channelModelCooldownKey]channelModelCooldown
+}
+
+type channelModelCooldown struct {
+	until      time.Time
+	reason     string
+	recordedAt time.Time
+}
+
+// ChannelModelCooldown is one stored quota window for a channel and model.
+type ChannelModelCooldown struct {
+	ModelName  string
+	Until      time.Time
+	Reason     string
+	RecordedAt time.Time
 }
 
 // channelModelCooldowns remembers upstream quota windows that belong to a
@@ -22,12 +37,14 @@ type channelModelCooldownStore struct {
 // that cannot serve the model right now instead of spending a retry on every
 // request.
 var channelModelCooldowns = &channelModelCooldownStore{
-	expires: make(map[channelModelCooldownKey]time.Time),
+	expires: make(map[channelModelCooldownKey]channelModelCooldown),
 }
 
 // MarkChannelModelCooldown records that a channel cannot serve a model until
-// the given time. A time that is not in the future clears the entry.
-func MarkChannelModelCooldown(channelId int, modelName string, until time.Time) {
+// the given time. A time that is not in the future clears the entry. The reason
+// keeps the upstream message that produced the window so the channel view can
+// explain why an account is resting.
+func MarkChannelModelCooldown(channelId int, modelName string, until time.Time, reason string) {
 	if channelId <= 0 || modelName == "" {
 		return
 	}
@@ -40,7 +57,11 @@ func MarkChannelModelCooldown(channelId int, modelName string, until time.Time) 
 		delete(channelModelCooldowns.expires, key)
 		return
 	}
-	channelModelCooldowns.expires[key] = until
+	channelModelCooldowns.expires[key] = channelModelCooldown{
+		until:      until,
+		reason:     reason,
+		recordedAt: now,
+	}
 }
 
 // IsChannelModelCoolingDown reports whether the channel is inside a known
@@ -52,13 +73,40 @@ func IsChannelModelCoolingDown(channelId int, modelName string) bool {
 	key := channelModelCooldownKey{channelId: channelId, modelName: modelName}
 	channelModelCooldowns.mu.RLock()
 	defer channelModelCooldowns.mu.RUnlock()
-	until, ok := channelModelCooldowns.expires[key]
-	return ok && until.After(time.Now())
+	entry, ok := channelModelCooldowns.expires[key]
+	return ok && entry.until.After(time.Now())
+}
+
+// ChannelModelCooldowns lists the active quota windows of one channel. Expired
+// windows are dropped while reading, so the result only contains accounts that
+// still cannot serve the model.
+func ChannelModelCooldowns(channelId int) []ChannelModelCooldown {
+	if channelId <= 0 {
+		return nil
+	}
+	now := time.Now()
+	channelModelCooldowns.mu.Lock()
+	defer channelModelCooldowns.mu.Unlock()
+	channelModelCooldowns.dropExpiredLocked(now)
+	entries := make([]ChannelModelCooldown, 0, 4)
+	for key, entry := range channelModelCooldowns.expires {
+		if key.channelId != channelId {
+			continue
+		}
+		entries = append(entries, ChannelModelCooldown{
+			ModelName:  key.modelName,
+			Until:      entry.until,
+			Reason:     entry.reason,
+			RecordedAt: entry.recordedAt,
+		})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].ModelName < entries[j].ModelName })
+	return entries
 }
 
 func (s *channelModelCooldownStore) dropExpiredLocked(now time.Time) {
-	for key, until := range s.expires {
-		if !until.After(now) {
+	for key, entry := range s.expires {
+		if !entry.until.After(now) {
 			delete(s.expires, key)
 		}
 	}

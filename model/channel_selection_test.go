@@ -70,7 +70,7 @@ func TestChannelSelectionSkipsCoolingAccountPerModel(t *testing.T) {
 			"deepseek-v4-flash": {201},
 		},
 	}
-	MarkChannelModelCooldown(201, "kimi-k3", time.Now().Add(time.Hour))
+	MarkChannelModelCooldown(201, "kimi-k3", time.Now().Add(time.Hour), "")
 
 	channel, err := GetRandomSatisfiedChannel("default", "kimi-k3", 0, "", nil)
 	require.NoError(t, err)

@@ -119,21 +119,9 @@ func (p *Plan) Active(now time.Time) bool {
 }
 
 func Models(ctx context.Context, client *http.Client, base string, credential *Credential) ([]string, error) {
-	var plan struct {
-		Success bool   `json:"success"`
-		Data    *Plan  `json:"data"`
-		Error   string `json:"error"`
-	}
-	status, err := get(ctx, client, base, "/api/v1/users/me/plan", credential, &plan)
+	plan, err := FetchCurrentPlan(ctx, client, base, credential)
 	if err != nil {
 		return nil, err
-	}
-	if status == 404 && plan.Error == "no plan history found for user" {
-		plan.Data = nil
-	} else if status != 200 {
-		return nil, &HTTPError{Status: status}
-	} else if !plan.Success {
-		return nil, fmt.Errorf("Cline subscription lookup failed")
 	}
 	type entry struct {
 		ID string `json:"id"`
@@ -142,7 +130,7 @@ func Models(ctx context.Context, client *http.Client, base string, credential *C
 		Free []entry `json:"free"`
 		Pass []entry `json:"clinePass"`
 	}
-	status, err = get(ctx, client, base, "/api/v1/ai/cline/recommended-models", credential, &catalog)
+	status, err := get(ctx, client, base, "/api/v1/ai/cline/recommended-models", credential, &catalog)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +138,7 @@ func Models(ctx context.Context, client *http.Client, base string, credential *C
 		return nil, &HTTPError{Status: status}
 	}
 	entries := catalog.Free
-	if plan.Data.Active(time.Now()) {
+	if plan.Active(time.Now()) {
 		entries = append(entries, catalog.Pass...)
 	}
 	models := make([]string, 0, len(entries))

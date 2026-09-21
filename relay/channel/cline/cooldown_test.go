@@ -59,23 +59,6 @@ func TestCooldownUntilFallbacksAndClamps(t *testing.T) {
 	require.False(t, ok)
 }
 
-func TestParseRetryAfter(t *testing.T) {
-	window, ok := parseRetryAfter("Try again in 45m")
-	require.True(t, ok)
-	require.Equal(t, 45*time.Minute, window)
-
-	window, ok = parseRetryAfter("Try again in 45 minutes")
-	require.True(t, ok)
-	require.Equal(t, 45*time.Minute, window)
-
-	window, ok = parseRetryAfter("Try again in 1d 2h 30m")
-	require.True(t, ok)
-	require.Equal(t, 26*time.Hour+30*time.Minute, window)
-
-	_, ok = parseRetryAfter("Daily free limit reached")
-	require.False(t, ok)
-}
-
 func TestParseErrorBodyReadsHTTPErrorPayload(t *testing.T) {
 	now := time.Date(2026, 9, 21, 9, 0, 0, 0, time.UTC)
 

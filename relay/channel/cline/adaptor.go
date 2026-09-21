@@ -143,9 +143,9 @@ func (a *Adaptor) markQuotaCooldown(c *gin.Context, info *relaycommon.RelayInfo,
 	if !ok || info == nil {
 		return
 	}
-	model.MarkChannelModelCooldown(info.ChannelId, info.OriginModelName, until)
+	model.MarkChannelModelCooldown(info.ChannelId, info.OriginModelName, until, upstreamErr.Message)
 	if upstreamModel := info.UpstreamModelName; upstreamModel != "" && upstreamModel != info.OriginModelName {
-		model.MarkChannelModelCooldown(info.ChannelId, upstreamModel, until)
+		model.MarkChannelModelCooldown(info.ChannelId, upstreamModel, until, upstreamErr.Message)
 	}
 	logger.LogInfo(c, fmt.Sprintf(
 		"cline quota cooldown: channel #%d model %s until %s",
