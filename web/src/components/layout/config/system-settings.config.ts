@@ -59,7 +59,7 @@ function getSystemSettingsNavGroups(t: TFunction): NavGroup[] {
           items: getAuthSectionNavItems(t),
         },
         {
-          title: t('Billing & Payment'),
+          title: t('Billing'),
           icon: CreditCard,
           items: getBillingSectionNavItems(t),
         },
