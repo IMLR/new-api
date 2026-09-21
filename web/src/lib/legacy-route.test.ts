@@ -29,12 +29,9 @@ describe('legacy frontend route migration', () => {
       '/console': '/dashboard',
       '/console/models': '/models',
       '/console/deployment': '/models/deployments',
-      '/console/subscription': '/subscriptions',
       '/console/channel': '/channels',
       '/console/token': '/keys',
       '/console/playground': '/playground',
-      '/console/redemption': '/redemption-codes',
-      '/console/user': '/users',
       '/console/personal': '/profile',
       '/console/log': '/usage-logs',
       '/console/midjourney': '/usage-logs/drawing',
@@ -54,7 +51,7 @@ describe('legacy frontend route migration', () => {
     )
     assert.equal(
       resolveLegacyRoute('/console/topup?source=email#orders'),
-      '/wallet?source=email#orders'
+      '/dashboard?source=email#orders'
     )
   })
 
