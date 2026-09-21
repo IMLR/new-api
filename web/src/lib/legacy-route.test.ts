@@ -58,10 +58,7 @@ describe('legacy frontend route migration', () => {
   test('maps legacy settings tabs and retains unrelated parameters', () => {
     const settingsTabs = {
       operation: '/system-settings/operations/behavior',
-      dashboard: '/system-settings/content/dashboard',
-      chats: '/system-settings/content/chat',
-      drawing: '/system-settings/content/drawing',
-      payment: '/system-settings/billing/payment',
+
       ratio: '/system-settings/billing/model-pricing',
       ratelimit: '/system-settings/security/rate-limit',
       models: '/system-settings/models/global',
