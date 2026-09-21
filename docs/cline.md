@@ -45,6 +45,16 @@ New API 对外计费沿用现有模型定价，需按现有流程配置；上游
 
 上游统一用 SSE 并请求 usage，非流式调用将文本、推理、工具参数和 token 用量聚合成标准 JSON。截断或异常流报错，不返回伪成功。后台凭证维护独立于 Desktop，不需要安装桌面程序。
 
+## 上游错误
+
+Cline 有时在 HTTP 200 的 SSE 流里发送错误帧，典型情况是免费额度用尽：
+
+```json
+{"error":{"code":"INFERENCE_CAP_ERROR","message":"Error 429: Daily free limit reached on model vmc/fireworks-cline-k3-contributor-fallbacks. Try again in 7h 30m"}}
+```
+
+这类错误帧会还原成对应的 HTTP 状态（额度或频率限制为 `429`，凭证失效为 `401`，其他上游错误为 `502`），响应内容保留上游原文，重试和渠道禁用沿用 New API 的状态码规则。下游使用流式请求时，若错误出现在第一个事件里，同样先返回 HTTP 错误状态，客户端不会收到半截流。
+
 ## 验证（2026-09-19）
 
 已使用真实无订阅账号通过本项目 Go 实现完成：刷新并保存轮换凭证、获取六个免费模型、Kimi K3 流式请求和非流式完整响应。有效套餐、过期套餐、无订阅、认证/网络错误、并发刷新和工具参数拼接由针对性自动化测试覆盖；未使用真实 ClinePass 订阅账号验证。

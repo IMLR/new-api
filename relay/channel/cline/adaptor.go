@@ -2,6 +2,7 @@ package cline
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -89,12 +90,54 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 		merged, err := collectStream(resp.Body)
 		resp.Body.Close()
 		if err != nil {
+			var upstreamErr *UpstreamError
+			if errors.As(err, &upstreamErr) {
+				return upstreamErrorResponse(resp, upstreamErr), nil
+			}
 			return nil, err
 		}
 		resp.Body = io.NopCloser(bytes.NewReader(merged))
 		resp.ContentLength = int64(len(merged))
 		resp.Header.Set("Content-Type", "application/json")
 		resp.Header.Del("Content-Length")
+		return resp, nil
+	}
+	if resp.StatusCode == 200 && info.IsStream {
+		// Cline reports exhausted free quota as an error frame in a started
+		// stream. While nothing has been written downstream the failure can
+		// still become a normal HTTP error, so downstream clients and channel
+		// retries see the real cause.
+		upstreamErr, prefix, err := peekFirstFrameError(resp.Body)
+		if err != nil {
+			resp.Body.Close()
+			return nil, err
+		}
+		if upstreamErr != nil {
+			resp.Body.Close()
+			return upstreamErrorResponse(resp, upstreamErr), nil
+		}
+		resp.Body = &prefixedBody{Reader: io.MultiReader(bytes.NewReader(prefix), resp.Body), Closer: resp.Body}
 	}
 	return resp, nil
+}
+
+// prefixedBody replays the bytes consumed while inspecting the first SSE frame.
+type prefixedBody struct {
+	io.Reader
+	io.Closer
+}
+
+// upstreamErrorResponse turns an in-stream Cline error into a regular upstream
+// HTTP error response so the shared relay error path reports the real message
+// and applies the configured retry rules.
+func upstreamErrorResponse(resp *http.Response, upstreamErr *UpstreamError) *http.Response {
+	body := upstreamErr.BuildErrorBody()
+	resp.StatusCode = upstreamErr.StatusCode
+	resp.Status = fmt.Sprintf("%d %s", upstreamErr.StatusCode, http.StatusText(upstreamErr.StatusCode))
+	resp.Body = io.NopCloser(bytes.NewReader(body))
+	resp.ContentLength = int64(len(body))
+	resp.Header.Set("Content-Type", "application/json")
+	resp.Header.Del("Content-Length")
+	resp.Header.Del("Transfer-Encoding")
+	return resp
 }

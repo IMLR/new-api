@@ -2,14 +2,162 @@ package cline
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
+	"net/http"
 	"sort"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/dto"
 )
+
+// UpstreamError represents an error frame that Cline emits inside an HTTP 200
+// SSE stream. The original message is kept so clients see the real cause
+// instead of a generic relay failure.
+type UpstreamError struct {
+	StatusCode int
+	Code       string
+	Message    string
+}
+
+func (e *UpstreamError) Error() string { return e.Message }
+
+// upstreamErrorStatus maps a Cline error frame onto the HTTP status New API
+// should report, which also drives channel retry and disable decisions.
+func upstreamErrorStatus(code, message string) int {
+	lower := strings.ToLower(code + " " + message)
+	switch {
+	case strings.Contains(lower, "429"),
+		strings.Contains(lower, "rate limit"),
+		strings.Contains(lower, "cap_error"),
+		strings.Contains(lower, "quota"),
+		strings.Contains(lower, "daily limit"):
+		return http.StatusTooManyRequests
+	case strings.Contains(lower, "401"),
+		strings.Contains(lower, "403"),
+		strings.Contains(lower, "unauthorized"),
+		strings.Contains(lower, "forbidden"),
+		strings.Contains(lower, "invalid token"),
+		strings.Contains(lower, "revoked"):
+		return http.StatusUnauthorized
+	}
+	return http.StatusBadGateway
+}
+
+func parseUpstreamError(raw any) *UpstreamError {
+	code, message := "", ""
+	switch value := raw.(type) {
+	case string:
+		message = strings.TrimSpace(value)
+	case map[string]any:
+		if text, ok := value["message"].(string); ok {
+			message = strings.TrimSpace(text)
+		}
+		for _, key := range []string{"code", "type"} {
+			if text, ok := value[key].(string); ok && text != "" {
+				code = text
+				break
+			}
+		}
+		if message == "" {
+			if encoded, err := common.Marshal(value); err == nil {
+				message = string(encoded)
+			}
+		}
+	}
+	if message == "" {
+		message = "Cline upstream returned an empty error"
+	}
+	return &UpstreamError{StatusCode: upstreamErrorStatus(code, message), Code: code, Message: message}
+}
+
+// BuildErrorBody renders the upstream error as an OpenAI-compatible body so the
+// standard relay error path can parse it.
+func (e *UpstreamError) BuildErrorBody() []byte {
+	body, err := common.Marshal(map[string]any{
+		"error": map[string]any{
+			"message": e.Message,
+			"type":    "cline_upstream_error",
+			"code":    e.Code,
+		},
+	})
+	if err != nil {
+		return []byte(`{"error":{"message":"Cline upstream stream failed","type":"cline_upstream_error"}}`)
+	}
+	return body
+}
+
+// peekFirstFrameError inspects the first SSE event before any byte reaches the
+// client. Promotional routes report exhausted free quota as an error frame in a
+// started stream, which can only become a real HTTP status while nothing has
+// been written downstream yet.
+func peekFirstFrameError(body io.Reader) (*UpstreamError, []byte, error) {
+	const peekLimit = 64 << 10
+	buffered := make([]byte, 0, 4096)
+	chunk := make([]byte, 4096)
+	for {
+		if eventEnd := firstEventEnd(buffered); eventEnd >= 0 {
+			first := buffered[:eventEnd]
+			if err := firstEventError(first); err != nil {
+				return err, buffered, nil
+			}
+			return nil, buffered, nil
+		}
+		if len(buffered) > 0 && bytes.HasSuffix(buffered, []byte("\n")) && bytes.Count(buffered, []byte("\n")) == 1 {
+			if err := firstEventError(buffered); err != nil {
+				return err, buffered, nil
+			}
+		}
+		if len(buffered) >= peekLimit {
+			return nil, buffered, nil
+		}
+		n, err := body.Read(chunk)
+		if n > 0 {
+			buffered = append(buffered, chunk[:n]...)
+			continue
+		}
+		if err != nil {
+			if err == io.EOF {
+				return nil, buffered, nil
+			}
+			return nil, buffered, err
+		}
+	}
+}
+
+// firstEventEnd reports where the first SSE event block ends, accepting both
+// LF and CRLF separators, or -1 when the block is still incomplete.
+func firstEventEnd(buffered []byte) int {
+	index := -1
+	for _, separator := range [][]byte{[]byte("\n\n"), []byte("\r\n\r\n")} {
+		if at := bytes.Index(buffered, separator); at >= 0 && (index < 0 || at < index) {
+			index = at
+		}
+	}
+	return index
+}
+
+func firstEventError(event []byte) *UpstreamError {
+	for _, line := range strings.Split(string(event), "\n") {
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		data := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if data == "" || data == "[DONE]" {
+			continue
+		}
+		var frame struct {
+			Error any `json:"error"`
+		}
+		if common.UnmarshalJsonStr(data, &frame) != nil || frame.Error == nil {
+			continue
+		}
+		return parseUpstreamError(frame.Error)
+	}
+	return nil
+}
 
 type collectedChoice struct {
 	Index        int              `json:"index"`
@@ -63,7 +211,7 @@ func collectStream(body io.Reader) ([]byte, error) {
 			return nil, fmt.Errorf("Invalid Cline SSE frame")
 		}
 		if frame.Error != nil {
-			return nil, fmt.Errorf("Cline upstream stream failed")
+			return nil, parseUpstreamError(frame.Error)
 		}
 		if frame.Id != "" {
 			result.ID = frame.Id
