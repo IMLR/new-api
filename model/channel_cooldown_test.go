@@ -34,3 +34,16 @@ func TestFilterUnavailableChannels(t *testing.T) {
 	// caller can still report the upstream error.
 	require.Equal(t, channels, filterUnavailableChannels(channels, "kimi-k3", []int{1, 3}))
 }
+
+func TestChannelModelCooldownExpiresByTime(t *testing.T) {
+	MarkChannelModelCooldown(99, "kimi-k3", time.Now().Add(30*time.Millisecond))
+	require.True(t, IsChannelModelCoolingDown(99, "kimi-k3"))
+
+	// No timer, no cleanup call: once the deadline passes the channel is
+	// selectable again on the next lookup.
+	require.Eventually(t, func() bool {
+		return !IsChannelModelCoolingDown(99, "kimi-k3")
+	}, time.Second, 5*time.Millisecond)
+
+	require.Equal(t, []int{99}, filterUnavailableChannels([]int{99}, "kimi-k3", nil))
+}
