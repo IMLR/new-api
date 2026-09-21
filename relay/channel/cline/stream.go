@@ -13,6 +13,10 @@ import (
 	"github.com/QuantumNous/new-api/dto"
 )
 
+// errorBodyLimit caps how much of a failed upstream response is buffered while
+// looking for a daily cap window. Real Cline errors are a few hundred bytes.
+const errorBodyLimit = 1 << 20
+
 // UpstreamError represents an error frame that Cline emits inside an HTTP 200
 // SSE stream. The original message is kept so clients see the real cause
 // instead of a generic relay failure.
@@ -33,6 +37,7 @@ func upstreamErrorStatus(code, message string) int {
 		strings.Contains(lower, "rate limit"),
 		strings.Contains(lower, "cap_error"),
 		strings.Contains(lower, "quota"),
+		strings.Contains(lower, "daily free limit"),
 		strings.Contains(lower, "daily limit"):
 		return http.StatusTooManyRequests
 	case strings.Contains(lower, "401"),
@@ -87,6 +92,61 @@ func (e *UpstreamError) BuildErrorBody() []byte {
 		return []byte(`{"error":{"message":"Cline upstream stream failed","type":"cline_upstream_error"}}`)
 	}
 	return body
+}
+
+// parseErrorBody reads the error object out of an upstream HTTP failure body.
+// Cline has served the same quota error both as an SSE frame inside HTTP 200
+// and as a plain HTTP 429 payload, so both shapes are accepted here.
+func parseErrorBody(body []byte) *UpstreamError {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return nil
+	}
+	if trimmed[0] == '{' {
+		var frame struct {
+			Error any `json:"error"`
+		}
+		if common.UnmarshalJsonStr(string(trimmed), &frame) == nil {
+			if frame.Error != nil {
+				return parseUpstreamError(frame.Error)
+			}
+			var generic map[string]any
+			if common.UnmarshalJsonStr(string(trimmed), &generic) == nil {
+				if _, hasMessage := generic["message"]; hasMessage {
+					return parseUpstreamError(generic)
+				}
+				if _, hasCode := generic["code"]; hasCode {
+					return parseUpstreamError(generic)
+				}
+			}
+			return nil
+		}
+	}
+	return parseUpstreamError(string(trimmed))
+}
+
+// readErrorBody buffers a failed upstream response so the quota window it
+// reports can be recorded, then rebuilds the body so the shared relay error
+// path still sees the original message.
+func readErrorBody(resp *http.Response) (*UpstreamError, error) {
+	buffered, err := io.ReadAll(io.LimitReader(resp.Body, errorBodyLimit+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(buffered) > errorBodyLimit {
+		resp.Body = &prefixedBody{
+			Reader: io.MultiReader(bytes.NewReader(buffered), resp.Body),
+			Closer: resp.Body,
+		}
+		resp.ContentLength = -1
+		resp.Header.Del("Content-Length")
+	} else {
+		resp.Body.Close()
+		resp.Body = io.NopCloser(bytes.NewReader(buffered))
+		resp.ContentLength = int64(len(buffered))
+		resp.Header.Del("Content-Length")
+	}
+	return parseErrorBody(buffered), nil
 }
 
 // peekFirstFrameError inspects the first SSE event before any byte reaches the

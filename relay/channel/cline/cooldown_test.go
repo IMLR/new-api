@@ -1,7 +1,9 @@
 package cline
 
 import (
+	"io"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -72,4 +74,52 @@ func TestParseRetryAfter(t *testing.T) {
 
 	_, ok = parseRetryAfter("Daily free limit reached")
 	require.False(t, ok)
+}
+
+func TestParseErrorBodyReadsHTTPErrorPayload(t *testing.T) {
+	now := time.Date(2026, 9, 21, 9, 0, 0, 0, time.UTC)
+
+	// Cline has served the same daily cap message as a plain HTTP error body.
+	upstreamErr := parseErrorBody([]byte(`{"error":{"message":"Error 429: Daily free limit reached on model vmc/fireworks-cline-k3-contributor-fallbacks. Try again in 18h 53m","code":"INFERENCE_CAP_ERROR"}}`))
+	require.NotNil(t, upstreamErr)
+	require.Equal(t, http.StatusTooManyRequests, upstreamErr.StatusCode)
+	until, ok := upstreamErr.CooldownUntil(now)
+	require.True(t, ok)
+	require.Equal(t, now.Add(18*time.Hour+53*time.Minute), until)
+
+	// A string error keeps its message and maps onto the credential status.
+	upstreamErr = parseErrorBody([]byte(`{"error":"Unauthorized: re-authenticate your Cline account."}`))
+	require.NotNil(t, upstreamErr)
+	require.Equal(t, http.StatusUnauthorized, upstreamErr.StatusCode)
+	_, ok = upstreamErr.CooldownUntil(now)
+	require.False(t, ok)
+
+	// Plain text still becomes an error, without inventing a quota window.
+	upstreamErr = parseErrorBody([]byte("Daily free limit reached. Try again in 2h"))
+	require.NotNil(t, upstreamErr)
+	require.Equal(t, http.StatusTooManyRequests, upstreamErr.StatusCode)
+	until, ok = upstreamErr.CooldownUntil(now)
+	require.True(t, ok)
+	require.Equal(t, now.Add(2*time.Hour), until)
+
+	require.Nil(t, parseErrorBody([]byte("   ")))
+}
+
+func TestReadErrorBodyKeepsResponseReadable(t *testing.T) {
+	body := `{"error":{"message":"Error 429: Daily free limit reached. Try again in 3h","code":"INFERENCE_CAP_ERROR"}}`
+	resp := &http.Response{
+		StatusCode: http.StatusTooManyRequests,
+		Header:     http.Header{"Content-Type": {"application/json"}, "Content-Length": {"110"}},
+		Body:       io.NopCloser(strings.NewReader(body)),
+	}
+
+	upstreamErr, err := readErrorBody(resp)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusTooManyRequests, upstreamErr.StatusCode)
+
+	restored, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	require.Equal(t, body, string(restored))
+	require.Equal(t, int64(len(body)), resp.ContentLength)
+	require.Empty(t, resp.Header.Get("Content-Length"))
 }

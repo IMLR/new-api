@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
 	clineapi "github.com/QuantumNous/new-api/pkg/cline"
 	"github.com/QuantumNous/new-api/relay/channel"
@@ -88,13 +89,25 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 		}
 		resp = result
 	}
-	if resp.StatusCode == 200 && !info.IsStream {
+	if resp.StatusCode != 200 {
+		// Cline reports the exhausted daily free quota either as an SSE error
+		// frame inside HTTP 200 or as a plain HTTP 429 payload. The window in
+		// the message drives channel selection, so it is read here as well.
+		upstreamErr, err := readErrorBody(resp)
+		if err != nil {
+			resp.Body.Close()
+			return nil, err
+		}
+		a.markQuotaCooldown(c, info, upstreamErr)
+		return resp, nil
+	}
+	if !info.IsStream {
 		merged, err := collectStream(resp.Body)
 		resp.Body.Close()
 		if err != nil {
 			var upstreamErr *UpstreamError
 			if errors.As(err, &upstreamErr) {
-				a.markQuotaCooldown(info, upstreamErr)
+				a.markQuotaCooldown(c, info, upstreamErr)
 				return upstreamErrorResponse(resp, upstreamErr), nil
 			}
 			return nil, err
@@ -105,29 +118,27 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 		resp.Header.Del("Content-Length")
 		return resp, nil
 	}
-	if resp.StatusCode == 200 && info.IsStream {
-		// Cline reports exhausted free quota as an error frame in a started
-		// stream. While nothing has been written downstream the failure can
-		// still become a normal HTTP error, so downstream clients and channel
-		// retries see the real cause.
-		upstreamErr, prefix, err := peekFirstFrameError(resp.Body)
-		if err != nil {
-			resp.Body.Close()
-			return nil, err
-		}
-		if upstreamErr != nil {
-			resp.Body.Close()
-			a.markQuotaCooldown(info, upstreamErr)
-			return upstreamErrorResponse(resp, upstreamErr), nil
-		}
-		resp.Body = &prefixedBody{Reader: io.MultiReader(bytes.NewReader(prefix), resp.Body), Closer: resp.Body}
+	// Cline reports exhausted free quota as an error frame in a started
+	// stream. While nothing has been written downstream the failure can
+	// still become a normal HTTP error, so downstream clients and channel
+	// retries see the real cause.
+	upstreamErr, prefix, err := peekFirstFrameError(resp.Body)
+	if err != nil {
+		resp.Body.Close()
+		return nil, err
 	}
+	if upstreamErr != nil {
+		resp.Body.Close()
+		a.markQuotaCooldown(c, info, upstreamErr)
+		return upstreamErrorResponse(resp, upstreamErr), nil
+	}
+	resp.Body = &prefixedBody{Reader: io.MultiReader(bytes.NewReader(prefix), resp.Body), Closer: resp.Body}
 	return resp, nil
 }
 
 // markQuotaCooldown records the daily cap window reported by Cline so channel
 // selection skips this account for the affected model until the quota resets.
-func (a *Adaptor) markQuotaCooldown(info *relaycommon.RelayInfo, upstreamErr *UpstreamError) {
+func (a *Adaptor) markQuotaCooldown(c *gin.Context, info *relaycommon.RelayInfo, upstreamErr *UpstreamError) {
 	until, ok := upstreamErr.CooldownUntil(time.Now())
 	if !ok || info == nil {
 		return
@@ -136,6 +147,10 @@ func (a *Adaptor) markQuotaCooldown(info *relaycommon.RelayInfo, upstreamErr *Up
 	if upstreamModel := info.UpstreamModelName; upstreamModel != "" && upstreamModel != info.OriginModelName {
 		model.MarkChannelModelCooldown(info.ChannelId, upstreamModel, until)
 	}
+	logger.LogInfo(c, fmt.Sprintf(
+		"cline quota cooldown: channel #%d model %s until %s",
+		info.ChannelId, info.OriginModelName, until.Format(time.RFC3339),
+	))
 }
 
 // prefixedBody replays the bytes consumed while inspecting the first SSE frame.
