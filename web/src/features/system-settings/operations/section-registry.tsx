@@ -18,10 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { SystemBehaviorSection } from '../general/system-behavior-section'
 import { MonitoringSettingsSection } from '../integrations/monitoring-settings-section'
-import { WorkerSettingsSection } from '../integrations/worker-settings-section'
 import { LogSettingsSection } from '../maintenance/log-settings-section'
-import { PerformanceSection } from '../maintenance/performance-section'
-import { UpdateCheckerSection } from '../maintenance/update-checker-section'
 import type { OperationsSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 
@@ -32,8 +29,6 @@ const OPERATIONS_SECTIONS = [
     build: (settings: OperationsSettings) => (
       <SystemBehaviorSection
         defaultValues={{
-          DefaultCollapseSidebar: settings.DefaultCollapseSidebar,
-          DemoSiteEnabled: settings.DemoSiteEnabled,
           SelfUseModeEnabled: settings.SelfUseModeEnabled,
         }}
       />
@@ -45,7 +40,6 @@ const OPERATIONS_SECTIONS = [
     build: (settings: OperationsSettings) => (
       <MonitoringSettingsSection
         defaultValues={{
-          QuotaRemindThreshold: settings.QuotaRemindThreshold,
           'perf_metrics_setting.enabled':
             settings['perf_metrics_setting.enabled'] ?? true,
           'perf_metrics_setting.flush_interval':
@@ -59,65 +53,11 @@ const OPERATIONS_SECTIONS = [
     ),
   },
   {
-    id: 'worker',
-    titleKey: 'Worker Proxy',
-    build: (settings: OperationsSettings) => (
-      <WorkerSettingsSection
-        defaultValues={{
-          WorkerUrl: settings.WorkerUrl,
-          WorkerValidKey: settings.WorkerValidKey,
-          WorkerAllowHttpImageRequestEnabled:
-            settings.WorkerAllowHttpImageRequestEnabled,
-        }}
-      />
-    ),
-  },
-  {
     id: 'logs',
     titleKey: 'Log Maintenance',
     build: (settings: OperationsSettings) => (
       <LogSettingsSection
         defaultEnabled={Boolean(settings.LogConsumeEnabled)}
-      />
-    ),
-  },
-  {
-    id: 'performance',
-    titleKey: 'Performance',
-    build: (settings: OperationsSettings) => (
-      <PerformanceSection
-        defaultValues={{
-          'performance_setting.disk_cache_enabled':
-            settings['performance_setting.disk_cache_enabled'] ?? false,
-          'performance_setting.disk_cache_threshold_mb':
-            settings['performance_setting.disk_cache_threshold_mb'] ?? 10,
-          'performance_setting.disk_cache_max_size_mb':
-            settings['performance_setting.disk_cache_max_size_mb'] ?? 1024,
-          'performance_setting.disk_cache_path':
-            settings['performance_setting.disk_cache_path'] ?? '',
-          'performance_setting.monitor_enabled':
-            settings['performance_setting.monitor_enabled'] ?? false,
-          'performance_setting.monitor_cpu_threshold':
-            settings['performance_setting.monitor_cpu_threshold'] ?? 90,
-          'performance_setting.monitor_memory_threshold':
-            settings['performance_setting.monitor_memory_threshold'] ?? 90,
-          'performance_setting.monitor_disk_threshold':
-            settings['performance_setting.monitor_disk_threshold'] ?? 95,
-        }}
-      />
-    ),
-  },
-  {
-    id: 'update-checker',
-    titleKey: 'System maintenance',
-    build: (
-      _settings: OperationsSettings,
-      currentVersion?: string | null,
-      startTime?: number | null
-    ) => (
-      <UpdateCheckerSection
-        currentVersion={currentVersion}
-        startTime={startTime}
       />
     ),
   },
@@ -127,8 +67,7 @@ export type OperationsSectionId = (typeof OPERATIONS_SECTIONS)[number]['id']
 
 const operationsRegistry = createSectionRegistry<
   OperationsSectionId,
-  OperationsSettings,
-  [string | null | undefined, number | null | undefined]
+  OperationsSettings
 >({
   sections: OPERATIONS_SECTIONS,
   defaultSection: 'behavior',

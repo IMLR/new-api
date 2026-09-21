@@ -16,8 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { SSRFSection } from '../request-limits/ssrf-section'
-import { TokenLimitSection } from '../request-limits/token-limit-section'
+import { SSRFSection } from './ssrf-section'
 import type { SecuritySettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 
@@ -42,18 +41,6 @@ const SECURITY_SECTIONS = [
             settings['fetch_setting.allowed_ports'],
           'fetch_setting.apply_ip_filter_for_domain':
             settings['fetch_setting.apply_ip_filter_for_domain'],
-        }}
-      />
-    ),
-  },
-  {
-    id: 'token-limits',
-    titleKey: 'Token Limits',
-    build: (settings: SecuritySettings) => (
-      <TokenLimitSection
-        defaultValues={{
-          'token_setting.max_user_tokens':
-            settings['token_setting.max_user_tokens'],
         }}
       />
     ),

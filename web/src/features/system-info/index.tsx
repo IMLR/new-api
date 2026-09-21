@@ -21,11 +21,17 @@ import { useTranslation } from 'react-i18next'
 import { SectionPageLayout } from '@/components/layout'
 import { Badge } from '@/components/ui/badge'
 
+import { UpdateCheckerSection } from '@/features/system-settings/maintenance/update-checker-section'
+
+import { useStatus } from '@/hooks/use-status'
 import { SystemInstancesPanel } from './components/system-instances-panel'
 import { SystemTasksPanel } from './components/system-tasks-panel'
 
 export function SystemInfo() {
   const { t } = useTranslation()
+  const { status } = useStatus()
+  const version = (status?.version as string | undefined) ?? null
+  const startTime = (status?.start_time as number | null | undefined) ?? null
 
   return (
     <SectionPageLayout>
@@ -41,6 +47,7 @@ export function SystemInfo() {
         <div className='space-y-4'>
           <SystemInstancesPanel />
           <SystemTasksPanel />
+          <UpdateCheckerSection currentVersion={version} startTime={startTime} />
         </div>
       </SectionPageLayout.Content>
     </SectionPageLayout>

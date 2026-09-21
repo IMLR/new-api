@@ -29,13 +29,13 @@ import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { ROLE } from '@/lib/roles'
 
-import { updateUserSettings } from '../../api'
+import { updateUserSettings } from '../api'
 import {
   DEFAULT_QUOTA_WARNING_THRESHOLD,
   NOTIFICATION_METHODS,
-} from '../../constants'
-import { parseUserSettings } from '../../lib'
-import type { UserProfile, UserSettings, NotifyType } from '../../types'
+} from '../constants'
+import { parseUserSettings } from '../lib'
+import type { UserProfile, UserSettings, NotifyType } from '../types'
 
 const NOTIFICATION_ICONS: Record<NotifyType, typeof Mail> = {
   email: Mail,
@@ -187,21 +187,6 @@ export function NotificationTab({ profile, onUpdate }: NotificationTabProps) {
           {t('Get notified when balance falls below this value')}
         </p>
       </div>
-
-      {/* Email Settings */}
-      {notifyType === 'email' && (
-        <div className='space-y-1.5'>
-          <Label htmlFor='notifyEmail'>{t('Notification Email')}</Label>
-          <Input
-            id='notifyEmail'
-            type='email'
-            className='h-9'
-            value={settings.notification_email}
-            onChange={(e) => updateField('notification_email', e.target.value)}
-            placeholder={t('Leave empty to use account email')}
-          />
-        </div>
-      )}
 
       {/* Webhook Settings */}
       {notifyType === 'webhook' && (

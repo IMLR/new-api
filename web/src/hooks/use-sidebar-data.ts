@@ -23,7 +23,6 @@ import {
   Key,
   LayoutDashboard,
   Radio,
-  ServerCog,
   User,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -34,7 +33,6 @@ import { getModelsSectionNavItems } from '@/features/system-settings/models/sect
 import { getOperationsSectionNavItems } from '@/features/system-settings/operations/section-registry'
 import { getSecuritySectionNavItems } from '@/features/system-settings/security/section-registry'
 import { getSiteSectionNavItems } from '@/features/system-settings/site/section-registry'
-import { ROLE } from '@/lib/roles'
 
 /**
  * Root navigation groups for the application sidebar. Personal build:
@@ -96,12 +94,6 @@ export function useSidebarData(): SidebarData {
             title: t('Models'),
             url: '/models/metadata',
             icon: Box,
-          },
-          {
-            title: t('System Info'),
-            url: '/system-info',
-            icon: ServerCog,
-            requiredRole: ROLE.SUPER_ADMIN,
           },
         ],
       },
