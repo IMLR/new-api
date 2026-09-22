@@ -37,8 +37,8 @@ const legacySettingsTabs: Record<string, string> = {
   models: '/system-settings/models/global',
   'model-deployment': '/system-settings/models/model-deployment',
   performance: '/system-settings/operations/performance',
-  system: '/system-settings/site/system-info',
-  other: '/system-settings/site/system-info',
+  system: '/system-settings/operations/monitoring',
+  other: '/system-settings/operations/monitoring',
 }
 
 function normalizeLegacyPath(pathname: string): string {

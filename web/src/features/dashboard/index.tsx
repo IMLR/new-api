@@ -30,7 +30,6 @@ import { useAuthStore } from '@/stores/auth-store'
 
 import { ModelsChartPreferences } from './components/models/models-chart-preferences'
 import { ModelsFilter } from './components/models/models-filter-dialog'
-import { OverviewDashboard } from './components/overview/overview-dashboard'
 import { DEFAULT_TIME_GRANULARITY } from './constants'
 import {
   buildDefaultDashboardFilters,
@@ -155,9 +154,6 @@ function PerformanceOverviewFallback() {
 }
 
 const SECTION_META: Record<DashboardSectionId, { titleKey: string }> = {
-  overview: {
-    titleKey: 'Overview',
-  },
   models: {
     titleKey: 'Model Call Analytics',
   },
@@ -204,13 +200,9 @@ export function Dashboard() {
     []
   )
 
-  const meta = SECTION_META[activeSection] ?? SECTION_META.overview
+  const meta = SECTION_META[activeSection] ?? SECTION_META.models
   const isAdmin = Boolean(userRole && userRole >= ROLE.ADMIN)
-  const visibleSections = useMemo(
-    () =>
-      DASHBOARD_SECTION_IDS.filter((section) => section !== 'overview'),
-    []
-  )
+  const visibleSections = useMemo(() => DASHBOARD_SECTION_IDS, [])
   const handleSectionChange = useCallback(
     (section: string) => {
       void navigate({
@@ -220,8 +212,7 @@ export function Dashboard() {
     },
     [navigate]
   )
-  const showSectionTabs =
-    activeSection !== 'overview' && visibleSections.length > 1
+  const showSectionTabs = visibleSections.length > 1
   const modelActions =
     activeSection === 'models' ? (
       <>
@@ -245,7 +236,7 @@ export function Dashboard() {
       <SectionPageLayout.Title>{t(meta.titleKey)}</SectionPageLayout.Title>
       <SectionPageLayout.Content>
         <div className='space-y-3 sm:space-y-4'>
-          {activeSection !== 'overview' && (
+          {(
             <div className='flex flex-wrap items-center justify-between gap-1.5 sm:gap-2'>
               {showSectionTabs ? (
                 <Tabs value={activeSection} onValueChange={handleSectionChange}>
@@ -267,7 +258,6 @@ export function Dashboard() {
               )}
             </div>
           )}
-          {activeSection === 'overview' && <OverviewDashboard />}
           {activeSection === 'models' && (
             <>
               <FadeIn>

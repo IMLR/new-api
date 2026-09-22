@@ -28,11 +28,8 @@ import {
 import { useTranslation } from 'react-i18next'
 
 import { type SidebarData } from '@/components/layout/types'
-import { getAuthSectionNavItems } from '@/features/system-settings/auth/section-registry'
 import { getModelsSectionNavItems } from '@/features/system-settings/models/section-registry'
 import { getOperationsSectionNavItems } from '@/features/system-settings/operations/section-registry'
-import { getSecuritySectionNavItems } from '@/features/system-settings/security/section-registry'
-import { getSiteSectionNavItems } from '@/features/system-settings/site/section-registry'
 
 /**
  * Root navigation groups for the application sidebar. Personal build:
@@ -101,10 +98,7 @@ export function useSidebarData(): SidebarData {
         id: 'settings',
         title: t('Settings'),
         items: [
-          ...getSiteSectionNavItems(t),
-          ...getAuthSectionNavItems(t),
           ...getModelsSectionNavItems(t),
-          ...getSecuritySectionNavItems(t),
           ...getOperationsSectionNavItems(t),
         ],
       },

@@ -25,6 +25,7 @@ import {
 import { LanguagePreferencesCard } from './components/language-preferences-card'
 import { LoginSessionsCard } from './components/login-sessions-card'
 import { PasskeyCard } from './components/passkey-card'
+import { PasskeySettingsCard } from './components/passkey-settings-card'
 import { ProfileHeader } from './components/profile-header'
 import { ProfileSecurityCard } from './components/profile-security-card'
 import { ProfileSettingsCard } from './components/profile-settings-card'
@@ -61,6 +62,7 @@ export function Profile() {
 
               <div className='space-y-4 sm:space-y-6 xl:sticky xl:top-6'>
                 <PasskeyCard loading={loading} />
+                <PasskeySettingsCard />
                 <TwoFACard loading={loading} />
               </div>
             </div>

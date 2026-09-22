@@ -48,10 +48,10 @@ import {
   SettingsForm,
   SettingsSwitchContent,
   SettingsSwitchItem,
-} from '../components/settings-form-layout'
-import { SettingsPageFormActions } from '../components/settings-page-context'
-import { SettingsSection } from '../components/settings-section'
-import { useUpdateOption } from '../hooks/use-update-option'
+} from './components/settings-form-layout'
+import { SettingsPageFormActions } from './components/settings-page-context'
+import { SettingsSection } from './components/settings-section'
+import { useUpdateOption } from './hooks/use-update-option'
 
 type AttachmentPreference = '' | 'platform' | 'cross-platform'
 type AttachmentSelectValue = 'none' | 'platform' | 'cross-platform'

@@ -40,16 +40,10 @@ import { Route as AuthenticatedSystemInfoIndexRouteImport } from './routes/_auth
 import { Route as AuthenticatedSystemSettingsIndexRouteImport } from './routes/_authenticated/system-settings/index'
 import { Route as AuthenticatedUsageLogsIndexRouteImport } from './routes/_authenticated/usage-logs/index'
 import { Route as AuthenticatedUsageLogsSectionRouteImport } from './routes/_authenticated/usage-logs/$section'
-import { Route as AuthenticatedSystemSettingsAuthIndexRouteImport } from './routes/_authenticated/system-settings/auth/index'
-import { Route as AuthenticatedSystemSettingsAuthSectionRouteImport } from './routes/_authenticated/system-settings/auth/$section'
 import { Route as AuthenticatedSystemSettingsModelsIndexRouteImport } from './routes/_authenticated/system-settings/models/index'
 import { Route as AuthenticatedSystemSettingsModelsSectionRouteImport } from './routes/_authenticated/system-settings/models/$section'
 import { Route as AuthenticatedSystemSettingsOperationsIndexRouteImport } from './routes/_authenticated/system-settings/operations/index'
 import { Route as AuthenticatedSystemSettingsOperationsSectionRouteImport } from './routes/_authenticated/system-settings/operations/$section'
-import { Route as AuthenticatedSystemSettingsSecurityIndexRouteImport } from './routes/_authenticated/system-settings/security/index'
-import { Route as AuthenticatedSystemSettingsSecuritySectionRouteImport } from './routes/_authenticated/system-settings/security/$section'
-import { Route as AuthenticatedSystemSettingsSiteIndexRouteImport } from './routes/_authenticated/system-settings/site/index'
-import { Route as AuthenticatedSystemSettingsSiteSectionRouteImport } from './routes/_authenticated/system-settings/site/$section'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -216,18 +210,6 @@ const AuthenticatedUsageLogsSectionRoute =
     path: '/usage-logs/$section',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedSystemSettingsAuthIndexRoute =
-  AuthenticatedSystemSettingsAuthIndexRouteImport.update({
-    id: '/auth/',
-    path: '/auth/',
-    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
-  } as any)
-const AuthenticatedSystemSettingsAuthSectionRoute =
-  AuthenticatedSystemSettingsAuthSectionRouteImport.update({
-    id: '/auth/$section',
-    path: '/auth/$section',
-    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
-  } as any)
 const AuthenticatedSystemSettingsModelsIndexRoute =
   AuthenticatedSystemSettingsModelsIndexRouteImport.update({
     id: '/models/',
@@ -250,30 +232,6 @@ const AuthenticatedSystemSettingsOperationsSectionRoute =
   AuthenticatedSystemSettingsOperationsSectionRouteImport.update({
     id: '/operations/$section',
     path: '/operations/$section',
-    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
-  } as any)
-const AuthenticatedSystemSettingsSecurityIndexRoute =
-  AuthenticatedSystemSettingsSecurityIndexRouteImport.update({
-    id: '/security/',
-    path: '/security/',
-    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
-  } as any)
-const AuthenticatedSystemSettingsSecuritySectionRoute =
-  AuthenticatedSystemSettingsSecuritySectionRouteImport.update({
-    id: '/security/$section',
-    path: '/security/$section',
-    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
-  } as any)
-const AuthenticatedSystemSettingsSiteIndexRoute =
-  AuthenticatedSystemSettingsSiteIndexRouteImport.update({
-    id: '/site/',
-    path: '/site/',
-    getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
-  } as any)
-const AuthenticatedSystemSettingsSiteSectionRoute =
-  AuthenticatedSystemSettingsSiteSectionRouteImport.update({
-    id: '/site/$section',
-    path: '/site/$section',
     getParentRoute: () => AuthenticatedSystemSettingsRouteRoute,
   } as any)
 
@@ -307,16 +265,10 @@ export interface FileRoutesByFullPath {
   '/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
   '/usage-logs/': typeof AuthenticatedUsageLogsIndexRoute
-  '/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/system-settings/models/$section': typeof AuthenticatedSystemSettingsModelsSectionRoute
   '/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
-  '/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
-  '/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
-  '/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/models/': typeof AuthenticatedSystemSettingsModelsIndexRoute
   '/system-settings/operations/': typeof AuthenticatedSystemSettingsOperationsIndexRoute
-  '/system-settings/security/': typeof AuthenticatedSystemSettingsSecurityIndexRoute
-  '/system-settings/site/': typeof AuthenticatedSystemSettingsSiteIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -347,16 +299,10 @@ export interface FileRoutesByTo {
   '/system-info': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings': typeof AuthenticatedSystemSettingsIndexRoute
   '/usage-logs': typeof AuthenticatedUsageLogsIndexRoute
-  '/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/system-settings/models/$section': typeof AuthenticatedSystemSettingsModelsSectionRoute
   '/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
-  '/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
-  '/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
-  '/system-settings/auth': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/system-settings/models': typeof AuthenticatedSystemSettingsModelsIndexRoute
   '/system-settings/operations': typeof AuthenticatedSystemSettingsOperationsIndexRoute
-  '/system-settings/security': typeof AuthenticatedSystemSettingsSecurityIndexRoute
-  '/system-settings/site': typeof AuthenticatedSystemSettingsSiteIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -391,16 +337,10 @@ export interface FileRoutesById {
   '/_authenticated/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/_authenticated/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
   '/_authenticated/usage-logs/': typeof AuthenticatedUsageLogsIndexRoute
-  '/_authenticated/system-settings/auth/$section': typeof AuthenticatedSystemSettingsAuthSectionRoute
   '/_authenticated/system-settings/models/$section': typeof AuthenticatedSystemSettingsModelsSectionRoute
   '/_authenticated/system-settings/operations/$section': typeof AuthenticatedSystemSettingsOperationsSectionRoute
-  '/_authenticated/system-settings/security/$section': typeof AuthenticatedSystemSettingsSecuritySectionRoute
-  '/_authenticated/system-settings/site/$section': typeof AuthenticatedSystemSettingsSiteSectionRoute
-  '/_authenticated/system-settings/auth/': typeof AuthenticatedSystemSettingsAuthIndexRoute
   '/_authenticated/system-settings/models/': typeof AuthenticatedSystemSettingsModelsIndexRoute
   '/_authenticated/system-settings/operations/': typeof AuthenticatedSystemSettingsOperationsIndexRoute
-  '/_authenticated/system-settings/security/': typeof AuthenticatedSystemSettingsSecurityIndexRoute
-  '/_authenticated/system-settings/site/': typeof AuthenticatedSystemSettingsSiteIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -434,16 +374,10 @@ export interface FileRouteTypes {
     | '/system-info/'
     | '/system-settings/'
     | '/usage-logs/'
-    | '/system-settings/auth/$section'
     | '/system-settings/models/$section'
     | '/system-settings/operations/$section'
-    | '/system-settings/security/$section'
-    | '/system-settings/site/$section'
-    | '/system-settings/auth/'
     | '/system-settings/models/'
     | '/system-settings/operations/'
-    | '/system-settings/security/'
-    | '/system-settings/site/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -474,16 +408,10 @@ export interface FileRouteTypes {
     | '/system-info'
     | '/system-settings'
     | '/usage-logs'
-    | '/system-settings/auth/$section'
     | '/system-settings/models/$section'
     | '/system-settings/operations/$section'
-    | '/system-settings/security/$section'
-    | '/system-settings/site/$section'
-    | '/system-settings/auth'
     | '/system-settings/models'
     | '/system-settings/operations'
-    | '/system-settings/security'
-    | '/system-settings/site'
   id:
     | '__root__'
     | '/'
@@ -517,16 +445,10 @@ export interface FileRouteTypes {
     | '/_authenticated/system-info/'
     | '/_authenticated/system-settings/'
     | '/_authenticated/usage-logs/'
-    | '/_authenticated/system-settings/auth/$section'
     | '/_authenticated/system-settings/models/$section'
     | '/_authenticated/system-settings/operations/$section'
-    | '/_authenticated/system-settings/security/$section'
-    | '/_authenticated/system-settings/site/$section'
-    | '/_authenticated/system-settings/auth/'
     | '/_authenticated/system-settings/models/'
     | '/_authenticated/system-settings/operations/'
-    | '/_authenticated/system-settings/security/'
-    | '/_authenticated/system-settings/site/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -761,20 +683,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedUsageLogsSectionRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/system-settings/auth/': {
-      id: '/_authenticated/system-settings/auth/'
-      path: '/auth'
-      fullPath: '/system-settings/auth/'
-      preLoaderRoute: typeof AuthenticatedSystemSettingsAuthIndexRouteImport
-      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
-    }
-    '/_authenticated/system-settings/auth/$section': {
-      id: '/_authenticated/system-settings/auth/$section'
-      path: '/auth/$section'
-      fullPath: '/system-settings/auth/$section'
-      preLoaderRoute: typeof AuthenticatedSystemSettingsAuthSectionRouteImport
-      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
-    }
     '/_authenticated/system-settings/models/': {
       id: '/_authenticated/system-settings/models/'
       path: '/models'
@@ -801,34 +709,6 @@ declare module '@tanstack/react-router' {
       path: '/operations/$section'
       fullPath: '/system-settings/operations/$section'
       preLoaderRoute: typeof AuthenticatedSystemSettingsOperationsSectionRouteImport
-      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
-    }
-    '/_authenticated/system-settings/security/': {
-      id: '/_authenticated/system-settings/security/'
-      path: '/security'
-      fullPath: '/system-settings/security/'
-      preLoaderRoute: typeof AuthenticatedSystemSettingsSecurityIndexRouteImport
-      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
-    }
-    '/_authenticated/system-settings/security/$section': {
-      id: '/_authenticated/system-settings/security/$section'
-      path: '/security/$section'
-      fullPath: '/system-settings/security/$section'
-      preLoaderRoute: typeof AuthenticatedSystemSettingsSecuritySectionRouteImport
-      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
-    }
-    '/_authenticated/system-settings/site/': {
-      id: '/_authenticated/system-settings/site/'
-      path: '/site'
-      fullPath: '/system-settings/site/'
-      preLoaderRoute: typeof AuthenticatedSystemSettingsSiteIndexRouteImport
-      parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
-    }
-    '/_authenticated/system-settings/site/$section': {
-      id: '/_authenticated/system-settings/site/$section'
-      path: '/site/$section'
-      fullPath: '/system-settings/site/$section'
-      preLoaderRoute: typeof AuthenticatedSystemSettingsSiteSectionRouteImport
       parentRoute: typeof AuthenticatedSystemSettingsRouteRoute
     }
   }
@@ -862,42 +742,24 @@ const authRouteRouteWithChildren = authRouteRoute._addFileChildren(
 
 interface AuthenticatedSystemSettingsRouteRouteChildren {
   AuthenticatedSystemSettingsIndexRoute: typeof AuthenticatedSystemSettingsIndexRoute
-  AuthenticatedSystemSettingsAuthSectionRoute: typeof AuthenticatedSystemSettingsAuthSectionRoute
   AuthenticatedSystemSettingsModelsSectionRoute: typeof AuthenticatedSystemSettingsModelsSectionRoute
   AuthenticatedSystemSettingsOperationsSectionRoute: typeof AuthenticatedSystemSettingsOperationsSectionRoute
-  AuthenticatedSystemSettingsSecuritySectionRoute: typeof AuthenticatedSystemSettingsSecuritySectionRoute
-  AuthenticatedSystemSettingsSiteSectionRoute: typeof AuthenticatedSystemSettingsSiteSectionRoute
-  AuthenticatedSystemSettingsAuthIndexRoute: typeof AuthenticatedSystemSettingsAuthIndexRoute
   AuthenticatedSystemSettingsModelsIndexRoute: typeof AuthenticatedSystemSettingsModelsIndexRoute
   AuthenticatedSystemSettingsOperationsIndexRoute: typeof AuthenticatedSystemSettingsOperationsIndexRoute
-  AuthenticatedSystemSettingsSecurityIndexRoute: typeof AuthenticatedSystemSettingsSecurityIndexRoute
-  AuthenticatedSystemSettingsSiteIndexRoute: typeof AuthenticatedSystemSettingsSiteIndexRoute
 }
 
 const AuthenticatedSystemSettingsRouteRouteChildren: AuthenticatedSystemSettingsRouteRouteChildren =
   {
     AuthenticatedSystemSettingsIndexRoute:
       AuthenticatedSystemSettingsIndexRoute,
-    AuthenticatedSystemSettingsAuthSectionRoute:
-      AuthenticatedSystemSettingsAuthSectionRoute,
     AuthenticatedSystemSettingsModelsSectionRoute:
       AuthenticatedSystemSettingsModelsSectionRoute,
     AuthenticatedSystemSettingsOperationsSectionRoute:
       AuthenticatedSystemSettingsOperationsSectionRoute,
-    AuthenticatedSystemSettingsSecuritySectionRoute:
-      AuthenticatedSystemSettingsSecuritySectionRoute,
-    AuthenticatedSystemSettingsSiteSectionRoute:
-      AuthenticatedSystemSettingsSiteSectionRoute,
-    AuthenticatedSystemSettingsAuthIndexRoute:
-      AuthenticatedSystemSettingsAuthIndexRoute,
     AuthenticatedSystemSettingsModelsIndexRoute:
       AuthenticatedSystemSettingsModelsIndexRoute,
     AuthenticatedSystemSettingsOperationsIndexRoute:
       AuthenticatedSystemSettingsOperationsIndexRoute,
-    AuthenticatedSystemSettingsSecurityIndexRoute:
-      AuthenticatedSystemSettingsSecurityIndexRoute,
-    AuthenticatedSystemSettingsSiteIndexRoute:
-      AuthenticatedSystemSettingsSiteIndexRoute,
   }
 
 const AuthenticatedSystemSettingsRouteRouteWithChildren =

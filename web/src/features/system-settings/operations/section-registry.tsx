@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { SystemBehaviorSection } from '../general/system-behavior-section'
 import { MonitoringSettingsSection } from '../integrations/monitoring-settings-section'
 import { LogSettingsSection } from '../maintenance/log-settings-section'
 import type { OperationsSettings } from '../types'
@@ -24,41 +23,26 @@ import { createSectionRegistry } from '../utils/section-registry'
 
 const OPERATIONS_SECTIONS = [
   {
-    id: 'behavior',
-    titleKey: 'System Behavior',
+    id: 'monitoring',
+    titleKey: 'Logs & Monitoring',
     build: (settings: OperationsSettings) => (
-      <SystemBehaviorSection
-        defaultValues={{
-          SelfUseModeEnabled: settings.SelfUseModeEnabled,
-        }}
-      />
-    ),
-  },
-  {
-    id: 'alerts',
-    titleKey: 'Monitoring & Alerts',
-    build: (settings: OperationsSettings) => (
-      <MonitoringSettingsSection
-        defaultValues={{
-          'perf_metrics_setting.enabled':
-            settings['perf_metrics_setting.enabled'] ?? true,
-          'perf_metrics_setting.flush_interval':
-            settings['perf_metrics_setting.flush_interval'] ?? 5,
-          'perf_metrics_setting.bucket_time':
-            settings['perf_metrics_setting.bucket_time'] ?? 'hour',
-          'perf_metrics_setting.retention_days':
-            settings['perf_metrics_setting.retention_days'] ?? 0,
-        }}
-      />
-    ),
-  },
-  {
-    id: 'logs',
-    titleKey: 'Log Maintenance',
-    build: (settings: OperationsSettings) => (
-      <LogSettingsSection
-        defaultEnabled={Boolean(settings.LogConsumeEnabled)}
-      />
+      <div className='space-y-4'>
+        <MonitoringSettingsSection
+          defaultValues={{
+            'perf_metrics_setting.enabled':
+              settings['perf_metrics_setting.enabled'] ?? true,
+            'perf_metrics_setting.flush_interval':
+              settings['perf_metrics_setting.flush_interval'] ?? 5,
+            'perf_metrics_setting.bucket_time':
+              settings['perf_metrics_setting.bucket_time'] ?? 'hour',
+            'perf_metrics_setting.retention_days':
+              settings['perf_metrics_setting.retention_days'] ?? 0,
+          }}
+        />
+        <LogSettingsSection
+          defaultEnabled={Boolean(settings.LogConsumeEnabled)}
+        />
+      </div>
     ),
   },
 ] as const
@@ -70,7 +54,7 @@ const operationsRegistry = createSectionRegistry<
   OperationsSettings
 >({
   sections: OPERATIONS_SECTIONS,
-  defaultSection: 'behavior',
+  defaultSection: 'monitoring',
   basePath: '/system-settings/operations',
   urlStyle: 'path',
 })
