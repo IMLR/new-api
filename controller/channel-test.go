@@ -20,6 +20,7 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/billingexpr"
+	opencodeapi "github.com/QuantumNous/new-api/pkg/opencode"
 	"github.com/QuantumNous/new-api/relay"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
@@ -60,6 +61,20 @@ func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointTyp
 	}
 	if channel != nil && channel.Type == constant.ChannelTypeCodex {
 		return string(constant.EndpointTypeOpenAIResponse)
+	}
+	if channel != nil && channel.Type == constant.ChannelTypeOpenCodeGo {
+		// The upstream model decides the API family, so the automatic test has
+		// to speak the same family the relay would use.
+		upstreamModel := modelName
+		if resolved, ok := resolveUpstreamModel(channel, modelName); ok {
+			upstreamModel = resolved
+		}
+		switch opencodeapi.WireForModel(upstreamModel) {
+		case opencodeapi.WireOpenAIResponses:
+			return string(constant.EndpointTypeOpenAIResponse)
+		case opencodeapi.WireAnthropicMessages:
+			return string(constant.EndpointTypeAnthropic)
+		}
 	}
 	return normalized
 }
@@ -697,7 +712,10 @@ func validateTestResponseBody(respBody []byte, isStream bool) error {
 }
 
 func shouldUseStreamForAutomaticChannelTest(channel *model.Channel) bool {
-	return channel != nil && channel.Type == constant.ChannelTypeCodex
+	if channel == nil {
+		return false
+	}
+	return channel.Type == constant.ChannelTypeCodex || channel.Type == constant.ChannelTypeOpenCodeGo
 }
 
 func detectErrorMessageFromJSONBytes(jsonBytes []byte) string {

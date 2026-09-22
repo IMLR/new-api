@@ -369,6 +369,9 @@ func fetchChannelUpstreamModelIDs(channel *model.Channel) ([]string, error) {
 	if channel.Type == constant.ChannelTypeCline {
 		return service.FetchClineChannelModels(channel)
 	}
+	if channel.Type == constant.ChannelTypeOpenCodeGo {
+		return service.FetchOpenCodeGoChannelModels(channel)
+	}
 	if channel.Type == constant.ChannelTypeCodex {
 		return service.FetchCodexChannelModels(channel)
 	}

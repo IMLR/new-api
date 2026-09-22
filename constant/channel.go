@@ -58,6 +58,7 @@ const (
 	ChannelTypeAdvancedCustom = 58
 	ChannelTypeSub2API        = 59
 	ChannelTypeCline          = 60
+	ChannelTypeOpenCodeGo     = 61
 	ChannelTypeDummy          // this one is only for count, do not add any channel after this
 
 )
@@ -124,6 +125,7 @@ var ChannelBaseURLs = []string{
 	"",                                          //58
 	"",                                          //59
 	"https://api.cline.bot",                     //60
+	"https://opencode.ai/zen/go",                //61
 }
 
 var ChannelTypeNames = map[int]string{
@@ -184,6 +186,7 @@ var ChannelTypeNames = map[int]string{
 	ChannelTypeAdvancedCustom: "Advanced Custom",
 	ChannelTypeSub2API:        "Sub2API",
 	ChannelTypeCline:          "Cline",
+	ChannelTypeOpenCodeGo:     "OpenCode Go",
 }
 
 func GetChannelTypeName(channelType int) string {

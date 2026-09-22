@@ -15,6 +15,7 @@ import (
 	"github.com/QuantumNous/new-api/i18n"
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/cline"
+	opencodeapi "github.com/QuantumNous/new-api/pkg/opencode"
 	relaychannel "github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/ollama"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -528,6 +529,20 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 			channel.Key = string(encoded)
 		}
 	}
+	// OpenCode Go stores one plain API key. A JSON entry copied out of the
+	// OpenCode credential file is unwrapped here so the relay sends the key.
+	if channel.Type == constant.ChannelTypeOpenCodeGo {
+		if channel.ChannelInfo.IsMultiKey {
+			return fmt.Errorf("OpenCode Go requires a single-key channel")
+		}
+		if isAdd || strings.TrimSpace(channel.Key) != "" {
+			key, err := opencodeapi.ParseKey(channel.Key)
+			if err != nil {
+				return err
+			}
+			channel.Key = key
+		}
+	}
 	// Codex OAuth key validation (optional, only when JSON object is provided)
 	if channel.Type == constant.ChannelTypeCodex {
 		trimmedKey := strings.TrimSpace(channel.Key)
@@ -641,6 +656,10 @@ func AddChannel(c *gin.Context) {
 
 	if addChannelRequest.Channel.Type == constant.ChannelTypeCline && addChannelRequest.Mode != "single" && addChannelRequest.Mode != "" {
 		common.ApiError(c, fmt.Errorf("Cline requires a single-credential channel"))
+		return
+	}
+	if addChannelRequest.Channel.Type == constant.ChannelTypeOpenCodeGo && addChannelRequest.Mode != "single" && addChannelRequest.Mode != "" {
+		common.ApiError(c, fmt.Errorf("OpenCode Go requires a single-key channel"))
 		return
 	}
 	addChannelRequest.Channel.CreatedTime = common.GetTimestamp()
@@ -1320,7 +1339,7 @@ func FetchModels(c *gin.Context) {
 		}
 
 		key := strings.TrimSpace(req.Key)
-		if req.Type != constant.ChannelTypeCodex && req.Type != constant.ChannelTypeCline {
+		if req.Type != constant.ChannelTypeCodex && req.Type != constant.ChannelTypeCline && req.Type != constant.ChannelTypeOpenCodeGo {
 			key = strings.Split(key, "\n")[0]
 		}
 		channel = &model.Channel{

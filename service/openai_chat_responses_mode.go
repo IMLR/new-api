@@ -3,6 +3,7 @@ package service
 import (
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
+	"github.com/QuantumNous/new-api/pkg/opencode"
 	"github.com/QuantumNous/new-api/service/relayconvert"
 	"github.com/QuantumNous/new-api/setting/model_setting"
 )
@@ -21,4 +22,14 @@ func ShouldChannelUseResponses(settings dto.ChannelSettings, channelID, channelT
 		return endpoint == string(constant.EndpointTypeOpenAIResponse)
 	}
 	return ShouldChatCompletionsUseResponsesGlobal(channelID, channelType, model)
+}
+
+// OpenCodeGoUsesResponsesWire reports whether one OpenCode Go model is served on
+// the OpenAI Responses API. The wire follows the upstream model name, so a
+// channel model mapping decides the endpoint as well.
+func OpenCodeGoUsesResponsesWire(channelType int, upstreamModel string) bool {
+	if channelType != constant.ChannelTypeOpenCodeGo {
+		return false
+	}
+	return opencode.WireForModel(upstreamModel) == opencode.WireOpenAIResponses
 }
