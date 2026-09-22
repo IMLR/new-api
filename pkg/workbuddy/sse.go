@@ -45,7 +45,10 @@ type normalizeReader struct {
 	// content: text, or a tool call whose function name is known. A stream
 	// whose raw frames carried tool calls but forwarded none leaves a strict
 	// client with an empty answer, so it is reported as a failure.
-	forwarded   int
+	forwarded int
+	// toolFrames keeps the first tool call frames of one stream, so a call the
+	// client rejected can be inspected in the log.
+	toolFrames  []string
 	lastPayload string
 	done        bool
 	err         error
@@ -104,10 +107,10 @@ func (r *normalizeReader) fill() {
 // generic disconnect message, while an error frame names the real cause.
 func (r *normalizeReader) fillTail() {
 	if !r.done {
-		if len(r.toolCallPending) > 0 || (r.answers > 0 && r.forwarded == 0) {
+		if len(r.toolFrames) > 0 || len(r.toolCallPending) > 0 || (r.answers > 0 && r.forwarded == 0) {
 			common.SysError(fmt.Sprintf(
-				"workbuddy relay dropped unusable tool calls: answers=%d forwarded=%d held=%s last frame: %s",
-				r.answers, r.forwarded, truncateFrame(r.heldPayload()), truncateFrame(r.lastPayload)))
+				"workbuddy relay stream: answers=%d forwarded=%d calls=%s held=%s last=%s",
+				r.answers, r.forwarded, truncateFrame(strings.Join(r.toolFrames, " ")), truncateFrame(r.heldPayload()), truncateFrame(r.lastPayload)))
 		}
 		if r.forwarded == 0 {
 			common.SysError(fmt.Sprintf("workbuddy upstream stream ended without an answer, last frame: %s", truncateFrame(r.lastPayload)))
@@ -119,6 +122,19 @@ func (r *normalizeReader) fillTail() {
 		r.buffer.WriteString("data: [DONE]\n\n")
 	}
 	r.err = io.EOF
+}
+
+// recordToolFrame keeps the first fragments of a stream that carry a function
+// name, up to three, for diagnosis.
+func (r *normalizeReader) recordToolFrame(call map[string]any) {
+	if len(r.toolFrames) >= 3 {
+		return
+	}
+	raw, err := json.Marshal(call)
+	if err != nil {
+		return
+	}
+	r.toolFrames = append(r.toolFrames, string(raw))
 }
 
 // heldPayload renders the tool call fragments that never received a name, so a
@@ -331,6 +347,7 @@ func (r *normalizeReader) splitToolCalls(frame map[string]any) map[string]any {
 				delete(function, "name")
 				kept = append(kept, call)
 			default:
+				r.recordToolFrame(call)
 				r.toolCallNames[index] = true
 				held := r.releaseToolCall(index)
 				if len(held) == 0 {
