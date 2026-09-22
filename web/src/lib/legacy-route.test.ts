@@ -52,6 +52,10 @@ describe('legacy frontend route migration', () => {
       resolveLegacyRoute('/console/topup?source=email#orders'),
       '/dashboard?source=email#orders'
     )
+    assert.equal(
+      resolveLegacyRoute('/system-info?tab=instances'),
+      '/system-settings/models/advanced?tab=instances'
+    )
   })
 
   test('maps legacy settings tabs and retains unrelated parameters', () => {

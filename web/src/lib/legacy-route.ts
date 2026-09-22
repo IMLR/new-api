@@ -70,6 +70,9 @@ export function resolveLegacyRoute(rawHref: string): string | null {
   if (pathname === '/forbidden') {
     return buildTargetHref('/403', source)
   }
+  if (pathname === '/system-info') {
+    return buildTargetHref('/system-settings/models/advanced', source)
+  }
   if (pathname === '/console/topup') {
     return buildTargetHref('/dashboard', source)
   }

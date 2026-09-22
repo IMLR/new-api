@@ -18,38 +18,31 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { useTranslation } from 'react-i18next'
 
-import { SectionPageLayout } from '@/components/layout'
-import { Badge } from '@/components/ui/badge'
-
-import { UpdateCheckerSection } from '@/features/system-settings/maintenance/update-checker-section'
-
+import { SystemInstancesPanel } from '@/features/system-info/components/system-instances-panel'
+import { SystemTasksPanel } from '@/features/system-info/components/system-tasks-panel'
 import { useStatus } from '@/hooks/use-status'
-import { SystemInstancesPanel } from './components/system-instances-panel'
-import { SystemTasksPanel } from './components/system-tasks-panel'
 
-export function SystemInfo() {
+import { SettingsSection } from '../components/settings-section'
+import { UpdateCheckerSection } from './update-checker-section'
+
+/**
+ * Instances, background tasks and version updates, shown at the bottom of the
+ * advanced configuration page.
+ */
+export function SystemInfoSection() {
   const { t } = useTranslation()
   const { status } = useStatus()
   const version = (status?.version as string | undefined) ?? null
   const startTime = (status?.start_time as number | null | undefined) ?? null
 
   return (
-    <SectionPageLayout>
-      <SectionPageLayout.Title>
-        <span className='inline-flex min-w-0 items-center gap-2'>
-          <span className='truncate'>{t('System Info')}</span>
-          <Badge variant='outline' className='shrink-0'>
-            Root
-          </Badge>
-        </span>
-      </SectionPageLayout.Title>
-      <SectionPageLayout.Content>
-        <div className='space-y-4'>
-          <SystemInstancesPanel />
-          <SystemTasksPanel />
-          <UpdateCheckerSection currentVersion={version} startTime={startTime} />
-        </div>
-      </SectionPageLayout.Content>
-    </SectionPageLayout>
+    <SettingsSection title={t('System Info')}>
+      <div className='space-y-4'>
+        <SystemInstancesPanel />
+        <SystemTasksPanel />
+        <UpdateCheckerSection currentVersion={version} startTime={startTime} />
+      </div>
+    </SettingsSection>
   )
 }
+

@@ -12,13 +12,9 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as authRouteRouteImport } from './routes/(auth)/route'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
-import { Route as authForgotPasswordRouteImport } from './routes/(auth)/forgot-password'
 import { Route as authOauthRouteImport } from './routes/(auth)/oauth'
 import { Route as authOtpRouteImport } from './routes/(auth)/otp'
-import { Route as authRegisterRouteImport } from './routes/(auth)/register'
-import { Route as authResetRouteImport } from './routes/(auth)/reset'
 import { Route as authSignInRouteImport } from './routes/(auth)/sign-in'
-import { Route as authSignUpRouteImport } from './routes/(auth)/sign-up'
 import { Route as errors401RouteImport } from './routes/(errors)/401'
 import { Route as errors403RouteImport } from './routes/(errors)/403'
 import { Route as errors404RouteImport } from './routes/(errors)/404'
@@ -27,7 +23,6 @@ import { Route as errors503RouteImport } from './routes/(errors)/503'
 import { Route as AuthenticatedSystemSettingsRouteRouteImport } from './routes/_authenticated/system-settings/route'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
-import { Route as authUserResetRouteImport } from './routes/(auth)/user/reset'
 import { Route as AuthenticatedChannelsIndexRouteImport } from './routes/_authenticated/channels/index'
 import { Route as AuthenticatedDashboardIndexRouteImport } from './routes/_authenticated/dashboard/index'
 import { Route as AuthenticatedDashboardSectionRouteImport } from './routes/_authenticated/dashboard/$section'
@@ -36,7 +31,6 @@ import { Route as AuthenticatedKeysIndexRouteImport } from './routes/_authentica
 import { Route as AuthenticatedModelsIndexRouteImport } from './routes/_authenticated/models/index'
 import { Route as AuthenticatedModelsSectionRouteImport } from './routes/_authenticated/models/$section'
 import { Route as AuthenticatedProfileIndexRouteImport } from './routes/_authenticated/profile/index'
-import { Route as AuthenticatedSystemInfoIndexRouteImport } from './routes/_authenticated/system-info/index'
 import { Route as AuthenticatedSystemSettingsIndexRouteImport } from './routes/_authenticated/system-settings/index'
 import { Route as AuthenticatedUsageLogsIndexRouteImport } from './routes/_authenticated/usage-logs/index'
 import { Route as AuthenticatedUsageLogsSectionRouteImport } from './routes/_authenticated/usage-logs/$section'
@@ -58,11 +52,6 @@ const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const authForgotPasswordRoute = authForgotPasswordRouteImport.update({
-  id: '/forgot-password',
-  path: '/forgot-password',
-  getParentRoute: () => authRouteRoute,
-} as any)
 const authOauthRoute = authOauthRouteImport.update({
   id: '/oauth',
   path: '/oauth',
@@ -73,24 +62,9 @@ const authOtpRoute = authOtpRouteImport.update({
   path: '/otp',
   getParentRoute: () => authRouteRoute,
 } as any)
-const authRegisterRoute = authRegisterRouteImport.update({
-  id: '/register',
-  path: '/register',
-  getParentRoute: () => authRouteRoute,
-} as any)
-const authResetRoute = authResetRouteImport.update({
-  id: '/reset',
-  path: '/reset',
-  getParentRoute: () => authRouteRoute,
-} as any)
 const authSignInRoute = authSignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
-  getParentRoute: () => authRouteRoute,
-} as any)
-const authSignUpRoute = authSignUpRouteImport.update({
-  id: '/sign-up',
-  path: '/sign-up',
   getParentRoute: () => authRouteRoute,
 } as any)
 const errors401Route = errors401RouteImport.update({
@@ -133,11 +107,6 @@ const SetupIndexRoute = SetupIndexRouteImport.update({
   id: '/setup/',
   path: '/setup/',
   getParentRoute: () => rootRouteImport,
-} as any)
-const authUserResetRoute = authUserResetRouteImport.update({
-  id: '/user/reset',
-  path: '/user/reset',
-  getParentRoute: () => authRouteRoute,
 } as any)
 const AuthenticatedChannelsIndexRoute =
   AuthenticatedChannelsIndexRouteImport.update({
@@ -186,12 +155,6 @@ const AuthenticatedProfileIndexRoute =
     path: '/profile/',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
-const AuthenticatedSystemInfoIndexRoute =
-  AuthenticatedSystemInfoIndexRouteImport.update({
-    id: '/system-info/',
-    path: '/system-info/',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedSystemSettingsIndexRoute =
   AuthenticatedSystemSettingsIndexRouteImport.update({
     id: '/',
@@ -238,13 +201,9 @@ const AuthenticatedSystemSettingsOperationsSectionRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/system-settings': typeof AuthenticatedSystemSettingsRouteRouteWithChildren
-  '/forgot-password': typeof authForgotPasswordRoute
   '/oauth': typeof authOauthRoute
   '/otp': typeof authOtpRoute
-  '/register': typeof authRegisterRoute
-  '/reset': typeof authResetRoute
   '/sign-in': typeof authSignInRoute
-  '/sign-up': typeof authSignUpRoute
   '/401': typeof errors401Route
   '/403': typeof errors403Route
   '/404': typeof errors404Route
@@ -252,7 +211,6 @@ export interface FileRoutesByFullPath {
   '/503': typeof errors503Route
   '/oauth/$provider': typeof OauthProviderRoute
   '/setup/': typeof SetupIndexRoute
-  '/user/reset': typeof authUserResetRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
@@ -262,7 +220,6 @@ export interface FileRoutesByFullPath {
   '/keys/': typeof AuthenticatedKeysIndexRoute
   '/models/': typeof AuthenticatedModelsIndexRoute
   '/profile/': typeof AuthenticatedProfileIndexRoute
-  '/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
   '/usage-logs/': typeof AuthenticatedUsageLogsIndexRoute
   '/system-settings/models/$section': typeof AuthenticatedSystemSettingsModelsSectionRoute
@@ -272,13 +229,9 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/forgot-password': typeof authForgotPasswordRoute
   '/oauth': typeof authOauthRoute
   '/otp': typeof authOtpRoute
-  '/register': typeof authRegisterRoute
-  '/reset': typeof authResetRoute
   '/sign-in': typeof authSignInRoute
-  '/sign-up': typeof authSignUpRoute
   '/401': typeof errors401Route
   '/403': typeof errors403Route
   '/404': typeof errors404Route
@@ -286,7 +239,6 @@ export interface FileRoutesByTo {
   '/503': typeof errors503Route
   '/oauth/$provider': typeof OauthProviderRoute
   '/setup': typeof SetupIndexRoute
-  '/user/reset': typeof authUserResetRoute
   '/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/models/$section': typeof AuthenticatedModelsSectionRoute
@@ -296,7 +248,6 @@ export interface FileRoutesByTo {
   '/keys': typeof AuthenticatedKeysIndexRoute
   '/models': typeof AuthenticatedModelsIndexRoute
   '/profile': typeof AuthenticatedProfileIndexRoute
-  '/system-info': typeof AuthenticatedSystemInfoIndexRoute
   '/system-settings': typeof AuthenticatedSystemSettingsIndexRoute
   '/usage-logs': typeof AuthenticatedUsageLogsIndexRoute
   '/system-settings/models/$section': typeof AuthenticatedSystemSettingsModelsSectionRoute
@@ -310,13 +261,9 @@ export interface FileRoutesById {
   '/(auth)': typeof authRouteRouteWithChildren
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/_authenticated/system-settings': typeof AuthenticatedSystemSettingsRouteRouteWithChildren
-  '/(auth)/forgot-password': typeof authForgotPasswordRoute
   '/(auth)/oauth': typeof authOauthRoute
   '/(auth)/otp': typeof authOtpRoute
-  '/(auth)/register': typeof authRegisterRoute
-  '/(auth)/reset': typeof authResetRoute
   '/(auth)/sign-in': typeof authSignInRoute
-  '/(auth)/sign-up': typeof authSignUpRoute
   '/(errors)/401': typeof errors401Route
   '/(errors)/403': typeof errors403Route
   '/(errors)/404': typeof errors404Route
@@ -324,7 +271,6 @@ export interface FileRoutesById {
   '/(errors)/503': typeof errors503Route
   '/oauth/$provider': typeof OauthProviderRoute
   '/setup/': typeof SetupIndexRoute
-  '/(auth)/user/reset': typeof authUserResetRoute
   '/_authenticated/dashboard/$section': typeof AuthenticatedDashboardSectionRoute
   '/_authenticated/errors/$error': typeof AuthenticatedErrorsErrorRoute
   '/_authenticated/models/$section': typeof AuthenticatedModelsSectionRoute
@@ -334,7 +280,6 @@ export interface FileRoutesById {
   '/_authenticated/keys/': typeof AuthenticatedKeysIndexRoute
   '/_authenticated/models/': typeof AuthenticatedModelsIndexRoute
   '/_authenticated/profile/': typeof AuthenticatedProfileIndexRoute
-  '/_authenticated/system-info/': typeof AuthenticatedSystemInfoIndexRoute
   '/_authenticated/system-settings/': typeof AuthenticatedSystemSettingsIndexRoute
   '/_authenticated/usage-logs/': typeof AuthenticatedUsageLogsIndexRoute
   '/_authenticated/system-settings/models/$section': typeof AuthenticatedSystemSettingsModelsSectionRoute
@@ -347,13 +292,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/system-settings'
-    | '/forgot-password'
     | '/oauth'
     | '/otp'
-    | '/register'
-    | '/reset'
     | '/sign-in'
-    | '/sign-up'
     | '/401'
     | '/403'
     | '/404'
@@ -361,7 +302,6 @@ export interface FileRouteTypes {
     | '/503'
     | '/oauth/$provider'
     | '/setup/'
-    | '/user/reset'
     | '/dashboard/$section'
     | '/errors/$error'
     | '/models/$section'
@@ -371,7 +311,6 @@ export interface FileRouteTypes {
     | '/keys/'
     | '/models/'
     | '/profile/'
-    | '/system-info/'
     | '/system-settings/'
     | '/usage-logs/'
     | '/system-settings/models/$section'
@@ -381,13 +320,9 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/forgot-password'
     | '/oauth'
     | '/otp'
-    | '/register'
-    | '/reset'
     | '/sign-in'
-    | '/sign-up'
     | '/401'
     | '/403'
     | '/404'
@@ -395,7 +330,6 @@ export interface FileRouteTypes {
     | '/503'
     | '/oauth/$provider'
     | '/setup'
-    | '/user/reset'
     | '/dashboard/$section'
     | '/errors/$error'
     | '/models/$section'
@@ -405,7 +339,6 @@ export interface FileRouteTypes {
     | '/keys'
     | '/models'
     | '/profile'
-    | '/system-info'
     | '/system-settings'
     | '/usage-logs'
     | '/system-settings/models/$section'
@@ -418,13 +351,9 @@ export interface FileRouteTypes {
     | '/(auth)'
     | '/_authenticated'
     | '/_authenticated/system-settings'
-    | '/(auth)/forgot-password'
     | '/(auth)/oauth'
     | '/(auth)/otp'
-    | '/(auth)/register'
-    | '/(auth)/reset'
     | '/(auth)/sign-in'
-    | '/(auth)/sign-up'
     | '/(errors)/401'
     | '/(errors)/403'
     | '/(errors)/404'
@@ -432,7 +361,6 @@ export interface FileRouteTypes {
     | '/(errors)/503'
     | '/oauth/$provider'
     | '/setup/'
-    | '/(auth)/user/reset'
     | '/_authenticated/dashboard/$section'
     | '/_authenticated/errors/$error'
     | '/_authenticated/models/$section'
@@ -442,7 +370,6 @@ export interface FileRouteTypes {
     | '/_authenticated/keys/'
     | '/_authenticated/models/'
     | '/_authenticated/profile/'
-    | '/_authenticated/system-info/'
     | '/_authenticated/system-settings/'
     | '/_authenticated/usage-logs/'
     | '/_authenticated/system-settings/models/$section'
@@ -487,13 +414,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/(auth)/forgot-password': {
-      id: '/(auth)/forgot-password'
-      path: '/forgot-password'
-      fullPath: '/forgot-password'
-      preLoaderRoute: typeof authForgotPasswordRouteImport
-      parentRoute: typeof authRouteRoute
-    }
     '/(auth)/oauth': {
       id: '/(auth)/oauth'
       path: '/oauth'
@@ -508,32 +428,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof authOtpRouteImport
       parentRoute: typeof authRouteRoute
     }
-    '/(auth)/register': {
-      id: '/(auth)/register'
-      path: '/register'
-      fullPath: '/register'
-      preLoaderRoute: typeof authRegisterRouteImport
-      parentRoute: typeof authRouteRoute
-    }
-    '/(auth)/reset': {
-      id: '/(auth)/reset'
-      path: '/reset'
-      fullPath: '/reset'
-      preLoaderRoute: typeof authResetRouteImport
-      parentRoute: typeof authRouteRoute
-    }
     '/(auth)/sign-in': {
       id: '/(auth)/sign-in'
       path: '/sign-in'
       fullPath: '/sign-in'
       preLoaderRoute: typeof authSignInRouteImport
-      parentRoute: typeof authRouteRoute
-    }
-    '/(auth)/sign-up': {
-      id: '/(auth)/sign-up'
-      path: '/sign-up'
-      fullPath: '/sign-up'
-      preLoaderRoute: typeof authSignUpRouteImport
       parentRoute: typeof authRouteRoute
     }
     '/(errors)/401': {
@@ -592,13 +491,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/(auth)/user/reset': {
-      id: '/(auth)/user/reset'
-      path: '/user/reset'
-      fullPath: '/user/reset'
-      preLoaderRoute: typeof authUserResetRouteImport
-      parentRoute: typeof authRouteRoute
-    }
     '/_authenticated/channels/': {
       id: '/_authenticated/channels/'
       path: '/channels'
@@ -655,13 +547,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedProfileIndexRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
-    '/_authenticated/system-info/': {
-      id: '/_authenticated/system-info/'
-      path: '/system-info'
-      fullPath: '/system-info/'
-      preLoaderRoute: typeof AuthenticatedSystemInfoIndexRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
-    }
     '/_authenticated/system-settings/': {
       id: '/_authenticated/system-settings/'
       path: '/'
@@ -715,25 +600,15 @@ declare module '@tanstack/react-router' {
 }
 
 interface authRouteRouteChildren {
-  authForgotPasswordRoute: typeof authForgotPasswordRoute
   authOauthRoute: typeof authOauthRoute
   authOtpRoute: typeof authOtpRoute
-  authRegisterRoute: typeof authRegisterRoute
-  authResetRoute: typeof authResetRoute
   authSignInRoute: typeof authSignInRoute
-  authSignUpRoute: typeof authSignUpRoute
-  authUserResetRoute: typeof authUserResetRoute
 }
 
 const authRouteRouteChildren: authRouteRouteChildren = {
-  authForgotPasswordRoute: authForgotPasswordRoute,
   authOauthRoute: authOauthRoute,
   authOtpRoute: authOtpRoute,
-  authRegisterRoute: authRegisterRoute,
-  authResetRoute: authResetRoute,
   authSignInRoute: authSignInRoute,
-  authSignUpRoute: authSignUpRoute,
-  authUserResetRoute: authUserResetRoute,
 }
 
 const authRouteRouteWithChildren = authRouteRoute._addFileChildren(
@@ -778,7 +653,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedKeysIndexRoute: typeof AuthenticatedKeysIndexRoute
   AuthenticatedModelsIndexRoute: typeof AuthenticatedModelsIndexRoute
   AuthenticatedProfileIndexRoute: typeof AuthenticatedProfileIndexRoute
-  AuthenticatedSystemInfoIndexRoute: typeof AuthenticatedSystemInfoIndexRoute
   AuthenticatedUsageLogsIndexRoute: typeof AuthenticatedUsageLogsIndexRoute
 }
 
@@ -794,7 +668,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedKeysIndexRoute: AuthenticatedKeysIndexRoute,
   AuthenticatedModelsIndexRoute: AuthenticatedModelsIndexRoute,
   AuthenticatedProfileIndexRoute: AuthenticatedProfileIndexRoute,
-  AuthenticatedSystemInfoIndexRoute: AuthenticatedSystemInfoIndexRoute,
   AuthenticatedUsageLogsIndexRoute: AuthenticatedUsageLogsIndexRoute,
 }
 

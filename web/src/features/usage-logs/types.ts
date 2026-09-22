@@ -387,7 +387,6 @@ export interface GetTaskLogsParams {
  * Configuration for fetching logs by category
  */
 export interface FetchLogsConfig {
-  logCategory: LogCategory
   isAdmin: boolean
   page: number
   pageSize: number

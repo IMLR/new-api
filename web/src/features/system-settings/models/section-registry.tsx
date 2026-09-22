@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { ChannelAffinitySection } from '../general/channel-affinity'
+import { SystemInfoSection } from '../maintenance/system-info-section'
 import type { ModelSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 import { GlobalSettingsCard } from './global-settings-card'
@@ -94,6 +95,7 @@ const MODELS_SECTIONS = [
               settings['channel_affinity_setting.rules'],
           }}
         />
+        <SystemInfoSection />
       </div>
     ),
   },

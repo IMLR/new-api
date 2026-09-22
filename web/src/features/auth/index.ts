@@ -24,10 +24,6 @@ export {
   login,
   login2fa,
   logout,
-  register,
-  sendPasswordResetEmail,
-  sendEmailVerification,
-  bindEmail,
   createOAuthFlow,
   githubOAuthStart,
   wechatLoginByCode,
@@ -102,7 +98,6 @@ export {
 export { useTurnstile } from './hooks/use-turnstile'
 export { useOAuthLogin } from './hooks/use-oauth-login'
 export { useAuthRedirect } from './hooks/use-auth-redirect'
-export { useEmailVerification } from './hooks/use-email-verification'
 
 // ============================================================================
 // Components
@@ -111,6 +106,4 @@ export { useEmailVerification } from './hooks/use-email-verification'
 export { AuthLayout } from './auth-layout'
 export { OAuthProviders } from './components/oauth-providers'
 export { SignIn } from './sign-in'
-export { SignUp } from './sign-up'
-export { ForgotPassword } from './forgot-password'
 export { Otp } from './otp'

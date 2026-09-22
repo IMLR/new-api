@@ -28,7 +28,6 @@ import type {
   LoginResponse,
   Login2FAResponse,
   TwoFAPayload,
-  RegisterPayload,
   ApiResponse,
 } from './types'
 
@@ -113,21 +112,6 @@ export async function logout(): Promise<ApiResponse> {
 }
 
 // ----------------------------------------------------------------------------
-// Password Management
-// ----------------------------------------------------------------------------
-
-// Send password reset email
-export async function sendPasswordResetEmail(
-  email: string,
-  turnstile?: string
-): Promise<ApiResponse> {
-  const res = await api.get('/api/reset_password', {
-    params: { email, turnstile },
-  })
-  return res.data
-}
-
-// ----------------------------------------------------------------------------
 // OAuth
 // ----------------------------------------------------------------------------
 
@@ -181,32 +165,5 @@ export async function telegramLogin(
 // ----------------------------------------------------------------------------
 
 // User registration
-export async function register(payload: RegisterPayload): Promise<ApiResponse> {
-  const res = await api.post(`/api/user/register`, payload, {
-    params: { turnstile: payload.turnstile ?? '' },
-  })
-  return res.data
-}
-
 // Send email verification code
-export async function sendEmailVerification(
-  email: string,
-  turnstile?: string
-): Promise<ApiResponse> {
-  const res = await api.get('/api/verification', {
-    params: { email, turnstile },
-  })
-  return res.data
-}
-
 // Bind email to OAuth account
-export async function bindEmail(
-  email: string,
-  code: string
-): Promise<ApiResponse> {
-  const res = await api.post('/api/oauth/email/bind', {
-    email,
-    code,
-  })
-  return res.data
-}

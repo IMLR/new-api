@@ -44,7 +44,7 @@ export {
   buildQueryParams,
   buildBaseParams,
   buildApiParams,
-  fetchLogsByCategory,
+  fetchLogs,
 } from './utils'
 
 // Status mapper utilities
@@ -60,4 +60,4 @@ export {
 } from './mappers'
 
 // Column utilities
-export { useColumnsByCategory } from './columns'
+export { useLogsColumns } from './columns'

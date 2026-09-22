@@ -16,7 +16,6 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { getRouteApi } from '@tanstack/react-router'
 import { useCallback } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -32,26 +31,9 @@ import {
   useUsageLogsContext,
 } from './components/usage-logs-provider'
 import { UsageLogsTable } from './components/usage-logs-table'
-import {
-  isUsageLogsSectionId,
-  USAGE_LOGS_DEFAULT_SECTION,
-  type UsageLogsSectionId,
-} from './section-registry'
-
-const route = getRouteApi('/_authenticated/usage-logs/$section')
-const SECTION_META: Record<UsageLogsSectionId, { titleKey: string }> = {
-  common: {
-    titleKey: 'Common Logs',
-  },
-}
 
 function UsageLogsContent() {
   const { t } = useTranslation()
-  const params = route.useParams()
-  const activeCategory: UsageLogsSectionId =
-    params.section && isUsageLogsSectionId(params.section)
-      ? params.section
-      : USAGE_LOGS_DEFAULT_SECTION
   const {
     selectedUserId,
     userInfoDialogOpen,
@@ -70,13 +52,12 @@ function UsageLogsContent() {
     [setViewScope]
   )
 
-  const pageMeta = SECTION_META.common
 
   return (
     <>
       <SectionPageLayout fixedContent>
         <SectionPageLayout.Title>
-          {t(pageMeta.titleKey)}
+          {t('Common Logs')}
         </SectionPageLayout.Title>
         {canManageScope && (
           <SectionPageLayout.Actions>
@@ -91,7 +72,7 @@ function UsageLogsContent() {
         <SectionPageLayout.Content>
           <div className='flex h-full min-h-0 flex-col gap-4'>
             <div className='min-h-0 flex-1'>
-              <UsageLogsTable logCategory={activeCategory} />
+              <UsageLogsTable />
             </div>
           </div>
         </SectionPageLayout.Content>

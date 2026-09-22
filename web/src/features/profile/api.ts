@@ -98,32 +98,9 @@ export async function generateAccessToken(): Promise<ApiResponse<string>> {
 /**
  * Send email verification code
  */
-export async function sendEmailVerification(
-  email: string,
-  turnstileToken?: string
-): Promise<ApiResponse> {
-  const params = new URLSearchParams({ email })
-  if (turnstileToken) {
-    params.append('turnstile', turnstileToken)
-  }
-  const res = await api.get(`/api/verification?${params}`)
-  return res.data
-}
-
 /**
  * Bind email account
  */
-export async function bindEmail(
-  email: string,
-  code: string
-): Promise<ApiResponse> {
-  const res = await api.post('/api/oauth/email/bind', {
-    email,
-    code,
-  })
-  return res.data
-}
-
 /**
  * Bind WeChat account
  */

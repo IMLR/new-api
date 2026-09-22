@@ -22,22 +22,21 @@
 
 ## 二、功能范围
 
-重建后需要覆盖的界面，共 12 项：
+重建后需要覆盖的界面，共 11 项：
 
 | 界面 | 作用 | 当前路由 |
 |---|---|---|
-| 登录与身份验证 | 登录、两步验证、通行密钥、找回与重置密码、注册（可关闭）、OAuth 回调、初始化向导 | `/sign-in`、`/otp`、`/forgot-password`、`/reset`、`/setup`、`/oauth` |
+| 登录与身份验证 | 登录、两步验证、通行密钥登录、OAuth 回调、初始化向导。没有注册、找回密码、重置密码入口 | `/sign-in`、`/otp`、`/setup`、`/oauth` |
 | 数据看板 | 模型调用量与消耗统计、性能概览 | `/dashboard/models` |
 | 渠道 | 上游渠道增删改查、测活、额度查询、指纹采样 | `/channels` |
 | 模型 | 模型元数据、供应商、价格（美元每百万 token）、元数据上游同步 | `/models/metadata` |
 | API 密钥 | 令牌增删改查、额度与限制 | `/keys` |
-| 使用日志 | 调用记录查询、统计、详情 | `/usage-logs/common` |
-| 高级配置 | 模型行为、重试、渠道自动停用、渠道亲和性 | `/system-settings/models/advanced` |
+| 使用日志 | 调用记录查询、统计、详情。只保留普通日志，没有绘图日志与任务日志 | `/usage-logs/common` |
+| 高级配置 | 模型行为、重试、渠道自动停用、渠道亲和性，页面底部是系统信息（实例、系统任务、版本更新） | `/system-settings/models/advanced` |
 | 日志与监控 | 性能指标设置、日志开关、日志清理 | `/system-settings/operations/monitoring` |
-| 系统信息 | 实例、系统任务、版本更新 | `/system-info` |
 | 个人资料 | 资料、通知方式、安全、登录会话、通行密钥、两步验证、语言 | `/profile` |
 | 错误页 | 401、403、404、500、503 | `/(errors)/*` |
-| 全局框架 | 侧边导航、头部、命令搜索、通知、语言、主题 | 所有已登录页面 |
+| 全局框架 | 侧边导航、头部、命令搜索、语言、主题 | 所有已登录页面 |
 
 ## 三、原子层
 
@@ -319,20 +318,21 @@
 | ServerLogFilesPanel | 日志目录、文件数量、总大小、日期范围、按数量或天数清理 |
 | SystemTaskList | 系统任务列表与进度 |
 
-### 5.6 系统信息
+### 5.6 系统信息（高级配置页面底部）
 
 | 组件 | 职责 |
 |---|---|
 | InstanceTable | 实例列表，删除失效实例 |
 | SystemTaskTable | 任务列表、状态、进度 |
 | UpdateCheckPanel | 当前版本、最新版本、检查更新、发布说明 |
+| SystemInfoSection | 把上面三个面板组合成一段，追加在渠道亲和性之后 |
 
 ### 5.7 个人资料
 
 | 组件 | 职责 |
 |---|---|
 | ProfileHeader | 头像、用户名、角色、分组 |
-| ProfileBasicForm | 用户名、邮箱绑定 |
+| ProfileBasicForm | 用户名、密码修改入口。不提供邮箱绑定 |
 | PasswordChangeDialog | 旧密码、新密码、确认 |
 | AccessTokenPanel | 生成、复制、删除访问令牌 |
 | LanguageCard | 界面语言 |
@@ -350,8 +350,6 @@
 | TwoFactorForm | 六位验证码、重发倒计时 |
 | PasskeyLoginButton | 通行密钥登录 |
 | OAuthButtons | 按后端返回的可用提供商渲染，没有配置时不显示 |
-| ForgotPasswordForm、ResetPasswordForm | 发送重置邮件、提交新密码 |
-| RegisterForm | 注册开关关闭时不渲染 |
 | SetupWizard | 首次初始化：环境检查、创建超级管理员账号 |
 | SessionExpiredNotice | 会话过期后的提示与跳转 |
 
@@ -363,13 +361,12 @@
 | 渠道 | 渠道表或卡片、筛选、批量动作、渠道编辑器、各类诊断与额度对话框 | `/api/channel`、`/api/channel/search`、`/api/channel/${id}`、`/api/channel/${id}/status`、`/api/channel/batch`、`/api/channel/copy/${id}`、`/api/channel/tag`、`/api/channel/models`、`/api/channel/disabled`、`/api/channel/ops`、`/api/channel/test`、`/api/channel/fetch_models`、`/api/channel/update_balance`、`/api/channel/multi_key/manage`、`/api/channel/fingerprint/${id}`、`/api/channel/codex/*`、`/api/channel/${id}/cline/quota`、`/api/channel/${id}/opencode-go/quota`、`/api/channel/workbuddy/oauth/start`、`/api/channel/workbuddy/oauth/complete`、`/api/channel/${channelId}/workbuddy/quota`、`/api/channel/${channelId}/workbuddy/tasks/${taskId}`、`/api/group/`、`/api/prefill_group` |
 | 模型 | 模型表（含价格列）、模型编辑器（含价格输入）、供应商管理、缺失模型、预填分组 | `/api/models/`、`/api/models/search`、`/api/models/missing`、`/api/models/sync_upstream`、`/api/vendors/`、`/api/option/`（价格存在 ModelRatio、CompletionRatio、CacheRatio、CreateCacheRatio、ModelPrice 这些选项里） |
 | API 密钥 | 密钥表、密钥编辑器、批量复制、CC Switch 导入 | `/api/token/`、`/api/token/search`、`/api/token/batch`、`/api/token/batch/keys`、`/api/token/${id}/key`、`/api/group/` |
-| 使用日志 | 筛选栏、统计条、日志表或卡片、详情与各类预览弹窗 | `/api/log`、`/api/log/stat`、`/api/user/${userId}` |
-| 高级配置 | 全局模型行为、路由可靠性、渠道亲和性、保存动作条 | `/api/option/` |
+| 使用日志 | 筛选栏、统计条、日志表或卡片、详情与失败原因弹窗 | `/api/log`、`/api/log/stat`、`/api/user/${userId}` |
+| 高级配置 | 全局模型行为、路由可靠性、渠道亲和性、保存动作条，底部追加实例列表、系统任务与更新检查 | `/api/option/`、`/api/system-info/instances`、`/api/system-info/stale-instances`、`/api/system-task/list`、`/api/system-task/current`、`/api/status` |
 | 日志与监控 | 性能指标、日志开关、日志清理、服务器日志文件、任务列表 | `/api/option/`、`/api/system-task/log-cleanup`、`/api/system-task/list`、`/api/system-task/current` |
-| 系统信息 | 实例列表、任务列表、更新检查 | `/api/system-info/instances`、`/api/system-info/stale-instances`、`/api/status` |
-| 个人资料 | 资料、通知、安全、会话、通行密钥、两步验证、语言 | `/api/user/self`、`/api/user/setting`、`/api/user/token`、`/api/user/sessions`、`/api/user/passkey/*`、`/api/user/login/2fa`、`/api/oauth/email/bind`、`/api/verification` |
-| 登录与初始化 | 登录、两步验证、找回与重置密码、通行密钥登录、初始化向导 | `/api/user/login`、`/api/user/login/2fa`、`/api/user/reset`、`/api/reset_password`、`/api/setup`、`/api/status` |
-| 全局框架 | 侧边导航、头部、命令搜索、通知、语言、主题、用户菜单 | `/api/status`、`/api/user/self`、`/api/notice` |
+| 个人资料 | 资料、通知方式、安全、会话、通行密钥、两步验证、语言 | `/api/user/self`、`/api/user/setting`、`/api/user/token`、`/api/user/sessions`、`/api/user/passkey/*`、`/api/user/login/2fa` |
+| 登录与初始化 | 登录、两步验证、通行密钥登录、初始化向导 | `/api/user/login`、`/api/user/login/2fa`、`/api/setup`、`/api/status` |
+| 全局框架 | 侧边导航、头部、命令搜索、语言、主题、用户菜单 | `/api/status`、`/api/user/self` |
 
 ## 七、应用层
 
@@ -455,16 +452,20 @@
 - 系统设置中的站点品牌、系统公告编辑、侧边栏模块、身份验证提供商配置、敏感词、令牌限制、Worker 代理、性能页面、限速设置、SMTP 邮件、生图与任务日志。
 - 概览页的公告、常见问题、接口信息、在线状态面板。
 - 模型定价面板：倍率表格、按阶梯批量设置倍率、分层定价表达式、工具调用价格、分组倍率、上游倍率同步。价格只在模型编辑器里按美元填写。
+- 通知弹窗与站点公告：头部不再有通知入口。
+- 注册、找回密码、重置密码页面：只保留登录、两步验证与通行密钥登录。
+- 邮箱绑定与邮件验证：个人资料不出现邮箱入口，也不提供邮件找回。
+- 绘图日志与任务日志界面：使用日志只做普通日志，图片与音频预览弹窗一并移除。
 
-## 十三、需要单独确认的边界项
+## 十三、已确认的边界决定
 
-| 项目 | 当前状态 | 建议处理 |
-|---|---|---|
-| 通知弹窗 | 头部保留组件，数据来自站点公告 | 保留，个人使用时用于查看后端发布说明 |
-| 系统信息页面 | 页面存在，导航中没有入口 | 移入个人资料或高级配置页面底部，避免出现无入口的页面 |
-| 注册、找回密码 | 页面存在，后端开关控制 | 保留页面，注册开关关闭时不渲染入口 |
-| 绘图日志、任务日志 | 数据接口与列定义存在，导航已移除 | 保留接口映射，界面只做普通日志，需要时再加类型筛选项 |
-| 邮箱绑定 | 个人资料中保留 | 保留，仅作为找回方式 |
+| 项目 | 决定 |
+|---|---|
+| 通知弹窗 | 不要。头部只保留搜索、语言、主题、用户菜单 |
+| 系统信息 | 并入高级配置页面底部：实例列表、系统任务、版本更新 |
+| 注册、找回密码、重置密码 | 不要。账号或密码出问题时直接改 Docker 里的数据库 |
+| 邮箱绑定 | 不要。个人资料不出现邮箱相关入口 |
+| 绘图日志、任务日志 | 不要。使用日志只做普通日志 |
 
 ## 十四、实现顺序
 
