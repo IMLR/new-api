@@ -19,6 +19,9 @@
 
 - [`docs/cline.md`](./docs/cline.md): Cline credential import, independent renewal, subscription-aware model discovery and OpenAI chat relay.
 
+- [`docs/opencode-go.md`](./docs/opencode-go.md): OpenCode Go credential
+  import, public model catalog, per-model endpoint routing, and subscription
+  usage.
 - [`docs/codex-oauth.md`](./docs/codex-oauth.md): independent ChatGPT OAuth
   authorization for Codex channels, including endpoints, state storage,
   security boundaries, and operator workflow.
@@ -34,3 +37,11 @@
 - `web/src/features/channels/components/channel-detection-settings.tsx`：按渠道的开关及模型端点配置。
 - `web/src/features/channels/components/dialogs/channel-fingerprint-button.tsx`：指纹按钮、采样状态和逐次结果。
 - `docs/channel-fingerprints.md`：功能操作、参考库来源及已知限制。
+
+### OpenCode Go 渠道（2026-09-22）
+
+- `pkg/opencode/`：密钥解析与掩码、模型到上游接口的划分、模型名归一化、模型目录和用量的读取与解析。
+- `relay/channel/opencode/`：按模型分流到 chat completions、Messages 或 Responses，请求与响应的格式转换，鉴权请求头和会话标识转发。
+- `service/opencode.go`、`controller/opencode_quota.go`：渠道模型目录与订阅用量的读取，以及渠道页面的额度接口。
+- `web/src/features/channels/components/dialogs/opencode-go-quota-dialog.tsx`：渠道列表中的订阅额度对话框。
+- `docs/opencode-go.md`：功能操作、上游接口划分及验证范围。

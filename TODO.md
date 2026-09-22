@@ -5,6 +5,10 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-09-22: Added OpenCode Go channels (type 61) with credential import,
+  model discovery from the public catalog, per-model routing across the chat,
+  Messages and Responses endpoints, session id forwarding, and subscription
+  usage queries in the channel list.
 - 2026-09-19: Added Cline channels with JSON credential import, automatic token rotation, subscription-aware model discovery and streaming/nonstreaming chat relay.
 
 - 2026-07-27: Added native AMD64/ARM64 GHCR builds and restricted automatic
