@@ -40,15 +40,16 @@ func TestValidateOpenCodeGoChannelKey(t *testing.T) {
 }
 
 func TestNormalizeChannelTestEndpointForOpenCodeGo(t *testing.T) {
-	channel := &model.Channel{Type: constant.ChannelTypeOpenCodeGo, Models: "kimi-k3,qwen3.8-max,grok-4.5,aliased"}
+	channel := &model.Channel{Type: constant.ChannelTypeOpenCodeGo, Models: "kimi-k3,qwen3.8-max,qwen3.8-flash,grok-4.5,aliased"}
 	mapping := `{"aliased":"minimax-m2.5"}`
 	channel.ModelMapping = &mapping
 
 	cases := map[string]string{
-		"kimi-k3":     "",
-		"qwen3.8-max": string(constant.EndpointTypeAnthropic),
-		"grok-4.5":    string(constant.EndpointTypeOpenAIResponse),
-		"aliased":     string(constant.EndpointTypeAnthropic),
+		"kimi-k3":       "",
+		"qwen3.8-max":   "",
+		"qwen3.8-flash": string(constant.EndpointTypeAnthropic),
+		"grok-4.5":      string(constant.EndpointTypeOpenAIResponse),
+		"aliased":       string(constant.EndpointTypeAnthropic),
 	}
 	for modelName, want := range cases {
 		assert.Equal(t, want, normalizeChannelTestEndpoint(channel, modelName, ""), modelName)

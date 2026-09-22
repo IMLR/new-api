@@ -53,7 +53,8 @@ func TestGetRequestURLFollowsModelWire(t *testing.T) {
 		want  string
 	}{
 		{"chat model", "kimi-k3", relayconstant.RelayModeChatCompletions, "https://opencode.ai/zen/go/v1/chat/completions"},
-		{"messages model", "qwen3.8-max", relayconstant.RelayModeChatCompletions, "https://opencode.ai/zen/go/v1/messages"},
+		{"messages model", "qwen3.8-flash", relayconstant.RelayModeChatCompletions, "https://opencode.ai/zen/go/v1/messages"},
+		{"qwen chat model", "qwen3.8-max", relayconstant.RelayModeChatCompletions, "https://opencode.ai/zen/go/v1/chat/completions"},
 		{"responses model", "grok-4.5", relayconstant.RelayModeChatCompletions, "https://opencode.ai/zen/go/v1/responses"},
 		{"responses model on responses route", "grok-4.5", relayconstant.RelayModeResponses, "https://opencode.ai/zen/go/v1/responses"},
 		{"client prefix", "opencode-go/muse-spark-1.2-contributor", relayconstant.RelayModeResponses, "https://opencode.ai/zen/go/v1/responses"},
@@ -79,7 +80,7 @@ func TestGetRequestURLRejectsMismatchedRoute(t *testing.T) {
 }
 
 func TestGetRequestURLRejectsPassThroughOnAnotherWire(t *testing.T) {
-	info := testRelayInfo("qwen3.8-max", relayconstant.RelayModeChatCompletions, types.RelayFormatOpenAI)
+	info := testRelayInfo("qwen3.8-flash", relayconstant.RelayModeChatCompletions, types.RelayFormatOpenAI)
 	info.ChannelSetting.PassThroughBodyEnabled = true
 	_, err := (&Adaptor{}).GetRequestURL(info)
 	require.Error(t, err)
@@ -176,6 +177,29 @@ func TestSetupRequestHeaderSendsClientUserAgent(t *testing.T) {
 	assert.Equal(t, "new-api", fallbackHeaders.Get("User-Agent"))
 }
 
+func TestSetupRequestHeaderForwardsClientRequestHeaders(t *testing.T) {
+	c, _ := testContext(t)
+	c.Request.Header.Set("X-Opencode-Request", "msg_123")
+	c.Request.Header.Set("X-Opencode-Client", "cli")
+	c.Request.Header.Set("X-Opencode-Project", "prj_9")
+	adaptor := &Adaptor{}
+
+	headers := http.Header{}
+	require.NoError(t, adaptor.SetupRequestHeader(c, &headers, testRelayInfo("kimi-k3", relayconstant.RelayModeChatCompletions, types.RelayFormatOpenAI)))
+	assert.Equal(t, "msg_123", headers.Get("x-opencode-request"))
+	assert.Equal(t, "cli", headers.Get("x-opencode-client"))
+	assert.Equal(t, "prj_9", headers.Get("x-opencode-project"))
+
+	anonymous, _ := testContext(t)
+	info := testRelayInfo("kimi-k3", relayconstant.RelayModeChatCompletions, types.RelayFormatOpenAI)
+	info.RequestId = "req_456"
+	fallbackHeaders := http.Header{}
+	require.NoError(t, adaptor.SetupRequestHeader(anonymous, &fallbackHeaders, info))
+	assert.Equal(t, "req_456", fallbackHeaders.Get("x-opencode-request"))
+	assert.Empty(t, fallbackHeaders.Get("x-opencode-client"))
+	assert.Empty(t, fallbackHeaders.Get("x-opencode-project"))
+}
+
 func TestConvertOpenAIRequestFollowsModelWire(t *testing.T) {
 	c, _ := testContext(t)
 	adaptor := &Adaptor{}
@@ -194,16 +218,16 @@ func TestConvertOpenAIRequestFollowsModelWire(t *testing.T) {
 	assert.True(t, convertedChat.StreamOptions.IncludeUsage)
 
 	messagesRequest := &dto.GeneralOpenAIRequest{
-		Model: "qwen3.8-max",
+		Model: "qwen3.8-flash",
 		Messages: []dto.Message{
 			{Role: "user", Content: "hi"},
 		},
 	}
-	messagesValue, err := adaptor.ConvertOpenAIRequest(c, testRelayInfo("qwen3.8-max", relayconstant.RelayModeChatCompletions, types.RelayFormatOpenAI), messagesRequest)
+	messagesValue, err := adaptor.ConvertOpenAIRequest(c, testRelayInfo("qwen3.8-flash", relayconstant.RelayModeChatCompletions, types.RelayFormatOpenAI), messagesRequest)
 	require.NoError(t, err)
 	convertedMessages, ok := messagesValue.(*dto.ClaudeRequest)
 	require.True(t, ok, "messages wire returned %T", messagesValue)
-	assert.Equal(t, "qwen3.8-max", convertedMessages.Model)
+	assert.Equal(t, "qwen3.8-flash", convertedMessages.Model)
 	assert.NotEmpty(t, convertedMessages.Messages)
 
 	responsesRequest := &dto.GeneralOpenAIRequest{

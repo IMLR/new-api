@@ -4,10 +4,10 @@ import "strings"
 
 // Wire is the upstream API family that serves one model on OpenCode Go.
 //
-// OpenCode Go publishes one endpoint per model: most models answer on the
-// OpenAI-compatible chat completions API, Qwen and MiniMax answer on Anthropic
-// Messages, and Grok, GPT 5.6 Luna and Muse Spark answer on the OpenAI
-// Responses API.
+// The upstream client catalog assigns every Go model to one family: most models
+// answer on the OpenAI-compatible chat completions API, MiniMax and Qwen3.8
+// Flash on Anthropic Messages, and Grok, GPT 5.6 Luna and Muse Spark on the
+// OpenAI Responses API.
 type Wire string
 
 const (
@@ -47,11 +47,12 @@ func cutPrefixFold(text, prefix string) (string, bool) {
 }
 
 // WireForModel returns the API family of one model ID. Unknown IDs default to
-// chat completions, which serves the largest group of Go models.
+// chat completions, which serves the largest group of Go models. A channel
+// model endpoint setting overrides this choice per model.
 func WireForModel(model string) Wire {
 	id := strings.ToLower(NormalizeModel(model))
 	switch {
-	case strings.HasPrefix(id, "qwen"), strings.HasPrefix(id, "minimax"):
+	case strings.HasPrefix(id, "minimax"), id == "qwen3.8-flash":
 		return WireAnthropicMessages
 	case strings.HasPrefix(id, "grok"), strings.HasPrefix(id, "muse-spark"), id == "gpt-5.6-luna":
 		return WireOpenAIResponses

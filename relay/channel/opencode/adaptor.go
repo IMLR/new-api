@@ -28,6 +28,14 @@ const ChannelName = "opencode_go"
 // without the header with 400 MissingSessionID.
 var sessionHeaders = []string{"x-opencode-session", "session_id"}
 
+// clientHeaders are the per-request headers the OpenCode client sends next to
+// the session id. They are forwarded when the caller sends them.
+var clientHeaders = []string{"x-opencode-request", "x-opencode-client", "x-opencode-project"}
+
+// requestIDHeader carries one request id. The upstream logs it, so requests
+// without a client value fall back to this relay's request id.
+const requestIDHeader = "x-opencode-request"
+
 // defaultUserAgent identifies this relay when the calling client sends none.
 // OpenCode Go asks clients to name themselves instead of relying on the HTTP
 // library default.
@@ -87,6 +95,7 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, header *http.Header, info *
 		return err
 	}
 	forwardSessionHeaders(c, header, info)
+	forwardClientHeaders(c, header, info)
 	setUserAgent(c, header)
 	return nil
 }
@@ -122,6 +131,25 @@ func clientHeaderValue(c *gin.Context, name string) string {
 		return ""
 	}
 	return strings.TrimSpace(c.Request.Header.Get(name))
+}
+
+// forwardClientHeaders forwards the request id, client name and project id of
+// the caller, so a relayed call carries the same headers as a direct one.
+func forwardClientHeaders(c *gin.Context, header *http.Header, info *relaycommon.RelayInfo) {
+	for _, name := range clientHeaders {
+		if header.Get(name) != "" {
+			continue
+		}
+		if value := clientHeaderValue(c, name); value != "" {
+			header.Set(name, value)
+		}
+	}
+	if header.Get(requestIDHeader) != "" {
+		return
+	}
+	if info != nil && info.RequestId != "" {
+		header.Set(requestIDHeader, info.RequestId)
+	}
 }
 
 // fallbackSessionID keeps requests of one channel, user and token on one

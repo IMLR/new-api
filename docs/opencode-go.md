@@ -23,11 +23,15 @@ OpenCode Go 按模型分成三个接口，同一个订阅的密钥通用：
 
 | 接口 | 认证 | 模型 |
 |------|------|------|
-| `/v1/chat/completions` | `Authorization: Bearer` | GLM、Kimi、LongCat、DeepSeek、MiMo、Hy3、Hy4 preview 等其余模型 |
-| `/v1/messages` | `x-api-key` | Qwen3.8 Max / Flash、Qwen3.7 Max / Plus、Qwen3.6 Plus、MiniMax M3 / M2.7 / M2.5 |
+| `/v1/chat/completions` | `Authorization: Bearer` | GLM、Kimi、LongCat、DeepSeek、MiMo、Hy3、Hy4 preview、Qwen3.5 Plus、Qwen3.6 Plus、Qwen3.7 Max / Plus、Qwen3.8 Max 等其余模型 |
+| `/v1/messages` | `x-api-key` | MiniMax M3 / M2.7 / M2.5、Qwen3.8 Flash |
 | `/v1/responses` | `Authorization: Bearer` | Grok 4.7 / 4.6 / 4.5、GPT 5.6 Luna、Muse Spark 1.3 / 1.2 Contributor |
 
-上表与 OpenCode 官方文档（`packages/web/src/content/docs/go.mdx`）一致。把模型发到不属于它的接口时，上游返回 `Model <id> is not supported for format openai`（或 `format anthropic`），所以模型映射会同时决定请求发往哪个接口。
+划分以官方客户端目录为准（`models.dev` 的 `opencode-go` 条目，每个模型声明自己的调用包：`@ai-sdk/openai-compatible` 对应 chat completions，`@ai-sdk/anthropic` 对应 Messages，`@ai-sdk/openai` 对应 Responses）。2026-09-22 逐条比对 40 个在线模型，本仓库的划分与目录一致。
+
+网关对部分模型也接受其它接口：例如 Qwen3.8 Max 发到 `/v1/messages` 同样能过，Grok 只认 `/v1/responses`。渠道的模型端点设置可以按模型覆盖这里的选择。
+
+把模型发到不受支持的接口时，上游返回 `Model <id> is not supported for format oa-compat|anthropic|openai`（`oa-compat` 即 chat completions），所以模型映射会同时决定请求发往哪个接口。
 
 `/v1/messages` 只认 `x-api-key`，用 Bearer 会得到 `Missing API key.`。
 
@@ -48,6 +52,8 @@ OpenCode 要求客户端为每个会话发送稳定的会话 ID（`x-opencode-se
 渠道测试与批量任务属于第 3 种情况，因此也能通过需要会话标识的线路。
 
 上游同时要求客户端表明自身身份，不要使用 HTTP 库的默认名称。中转转发客户端自带的 `User-Agent`；客户端没有带时使用 `new-api`。
+
+官方客户端还会发送 `x-opencode-request`（每条用户消息的 ID）、`x-opencode-client`（客户端名称）和 `x-opencode-project`（项目 ID）。中转原样转发这三个请求头，其中 `x-opencode-request` 缺失时填入中转自己的请求 ID，便于上游按请求关联。这三个字段在官方网关只做统计，转发到模型供应商之前会被移除，因此不影响调用结果。
 
 ## 订阅限额
 
