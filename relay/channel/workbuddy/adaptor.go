@@ -111,6 +111,16 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 		if err != nil {
 			return nil, err
 		}
+		if !workbuddyapi.HasUsableAnswer(merged) {
+			// The upstream answered with an empty turn, which some accounts do
+			// when the tool call header frame goes missing. One more attempt
+			// hides the flake from the client.
+			if retried, retryErr := a.retryAggregate(c, info, prepared); retryErr == nil {
+				merged = retried
+			} else {
+				common.SysError(fmt.Sprintf("workbuddy relay retry failed: %v", retryErr))
+			}
+		}
 		return jsonResponse(resp, merged), nil
 	}
 	frameErr, prefix, err := peekStreamError(resp.Body)
@@ -122,12 +132,68 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 		resp.Body.Close()
 		return errorResponse(resp, frameErr.status(), frameErr.Error()), nil
 	}
-	resp.Body = &prefixedBody{
-		Reader: workbuddyapi.NormalizeStream(io.MultiReader(bytes.NewReader(prefix), resp.Body)),
-		Closer: resp.Body,
-	}
+	resp.Body = a.streamBody(c, info, prepared, prefix, resp.Body)
 	resp.Header.Set("Content-Type", "text/event-stream")
 	return resp, nil
+}
+
+// streamBody wraps the first upstream body so the relay can ask for one more
+// attempt when the stream ends without a usable answer. The frames of a
+// discarded attempt never reach the client.
+func (a *Adaptor) streamBody(c *gin.Context, info *relaycommon.RelayInfo, prepared, prefix []byte, first io.ReadCloser) *retryBody {
+	stream := &retryBody{current: first}
+	stream.reader = workbuddyapi.NormalizeStreamWithRetry(
+		io.MultiReader(bytes.NewReader(prefix), first),
+		func() (io.ReadCloser, error) {
+			_ = stream.current.Close()
+			next, err := a.openStream(c, info, prepared)
+			if err != nil {
+				return nil, err
+			}
+			stream.current = next
+			return next, nil
+		},
+	)
+	return stream
+}
+
+// openStream sends the prepared request once more and returns the upstream body
+// with the frames that the error peek consumed put back in front. It serves the
+// retry path, where an upstream error is reported as a failed attempt instead of
+// a response of its own.
+func (a *Adaptor) openStream(c *gin.Context, info *relaycommon.RelayInfo, prepared []byte) (io.ReadCloser, error) {
+	resp, err := a.sendRequest(c, info, prepared)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 400 {
+		resp.Body.Close()
+		return nil, fmt.Errorf("workbuddy upstream returned status %d", resp.StatusCode)
+	}
+	frameErr, prefix, err := peekStreamError(resp.Body)
+	if err != nil {
+		resp.Body.Close()
+		return nil, err
+	}
+	if frameErr != nil {
+		resp.Body.Close()
+		return nil, frameErr
+	}
+	return &prefixedBody{
+		Reader: io.MultiReader(bytes.NewReader(prefix), resp.Body),
+		Closer: resp.Body,
+	}, nil
+}
+
+// retryAggregate runs one more upstream attempt for a non streaming request
+// whose first answer carried nothing the client could use.
+func (a *Adaptor) retryAggregate(c *gin.Context, info *relaycommon.RelayInfo, prepared []byte) ([]byte, error) {
+	body, err := a.openStream(c, info, prepared)
+	if err != nil {
+		return nil, err
+	}
+	defer body.Close()
+	return workbuddyapi.AggregateStream(body)
 }
 
 // The upstream gateway serves HTTP/2, where a half dead stream surfaces as
@@ -360,6 +426,17 @@ type prefixedBody struct {
 	io.Closer
 }
 
+// retryBody keeps the upstream body that the current attempt reads from, so a
+// retry can replace it while the client still closes one body.
+type retryBody struct {
+	reader  io.Reader
+	current io.ReadCloser
+}
+
+func (b *retryBody) Read(p []byte) (int, error) { return b.reader.Read(p) }
+
+func (b *retryBody) Close() error { return b.current.Close() }
+
 // framePeeker reads server sent event frames and keeps everything it consumed.
 type framePeeker struct {
 	reader *bufio.Reader
@@ -370,7 +447,24 @@ func newFramePeeker(source io.Reader) *framePeeker {
 	return &framePeeker{reader: bufio.NewReaderSize(source, 64*1024)}
 }
 
-func (p *framePeeker) read() []byte { return p.buffer.Bytes() }
+func (p *framePeeker) read() []byte {
+	p.drain()
+	return p.buffer.Bytes()
+}
+
+// drain moves the bytes the buffered reader pulled in but did not return yet
+// into the replayed prefix. Without it a frame that arrived in the same read as
+// the first one would be lost when the peek stops.
+func (p *framePeeker) drain() {
+	buffered := p.reader.Buffered()
+	if buffered == 0 {
+		return
+	}
+	extra := make([]byte, buffered)
+	if _, err := io.ReadFull(p.reader, extra); err == nil {
+		p.buffer.Write(extra)
+	}
+}
 
 // next returns the payload of the next frame. done reports the end of the
 // stream, raw returns everything read so far.

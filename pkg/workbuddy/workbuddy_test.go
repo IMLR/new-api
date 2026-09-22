@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -650,6 +651,75 @@ func TestNormalizeStreamReportsToolCallsBeforeDone(t *testing.T) {
 	out, err := readAll(NormalizeStream(strings.NewReader(source)))
 	require.NoError(t, err)
 	assert.Contains(t, out, "\"name\":\"exec_command\"")
-	assert.Contains(t, logged.String(), "workbuddy relay stream: answers=1 forwarded=1")
+	assert.Contains(t, logged.String(), "workbuddy relay stream: attempt=1 answers=1 forwarded=1")
 	assert.Contains(t, logged.String(), "exec_command")
+}
+
+func TestNormalizeStreamRetriesUnusableAnswer(t *testing.T) {
+	// The upstream sometimes streams a tool call without its header frame. The
+	// answer is unusable, so the relay asks for one more attempt and shows only
+	// that answer.
+	broken := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\"}}]},\"finish_reason\":null}]}",
+		"",
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}",
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	good := strings.Join([]string{
+		"data: {\"id\":\"chunk-2\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"done\"},\"finish_reason\":null}]}",
+		"",
+		"data: {\"id\":\"chunk-2\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	attempts := 0
+	out, err := readAll(NormalizeStreamWithRetry(strings.NewReader(broken), func() (io.ReadCloser, error) {
+		attempts++
+		return io.NopCloser(strings.NewReader(good)), nil
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, 1, attempts, "one more attempt is made")
+	assert.Contains(t, out, "\"content\":\"done\"")
+	assert.Contains(t, out, "chunk-2")
+	assert.NotContains(t, out, "chunk-1", "the discarded attempt leaves no frames behind")
+	assert.Equal(t, 1, strings.Count(out, "data: [DONE]"), "a single done marker reaches the client")
+	assert.NotContains(t, out, "without an answer")
+}
+
+func TestNormalizeStreamKeepsUsableAnswerWithoutRetry(t *testing.T) {
+	source := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"},\"finish_reason\":\"stop\"}]}",
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	attempts := 0
+	out, err := readAll(NormalizeStreamWithRetry(strings.NewReader(source), func() (io.ReadCloser, error) {
+		attempts++
+		return io.NopCloser(strings.NewReader("")), nil
+	}))
+	require.NoError(t, err)
+	assert.Zero(t, attempts, "a usable answer is not retried")
+	assert.Contains(t, out, "\"content\":\"hi\"")
+}
+
+func TestNormalizeStreamFailsAfterRetryWithoutAnswer(t *testing.T) {
+	broken := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\"}}]},\"finish_reason\":\"tool_calls\"}]}",
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	attempts := 0
+	out, err := readAll(NormalizeStreamWithRetry(strings.NewReader(broken), func() (io.ReadCloser, error) {
+		attempts++
+		return io.NopCloser(strings.NewReader(broken)), nil
+	}))
+	require.NoError(t, err)
+	assert.Equal(t, 1, attempts, "the retry is bounded to one more attempt")
+	assert.Contains(t, out, "upstream stream ended without an answer")
+	assert.Equal(t, 1, strings.Count(out, "data: [DONE]"))
 }

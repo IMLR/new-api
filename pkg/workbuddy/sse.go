@@ -16,11 +16,30 @@ import (
 // ErrEmptyStream reports an upstream answer that carried no usable frame.
 var ErrEmptyStream = errors.New("workbuddy upstream stream contained no data frame")
 
+// StreamRetry opens one more upstream attempt for the same request. The caller
+// closes the body it replaces.
+type StreamRetry func() (io.ReadCloser, error)
+
 // NormalizeStream rewrites the upstream server sent events into the standard
 // shape: only known fields survive, empty deltas and placeholder tool calls are
 // dropped, and the stream always ends with a done marker.
 func NormalizeStream(src io.Reader) io.Reader {
-	return &normalizeReader{src: bufio.NewReaderSize(src, 64*1024)}
+	return newNormalizeReader(src, nil)
+}
+
+// NormalizeStreamWithRetry rewrites the stream and asks for one more upstream
+// attempt when the answer turns out to be unusable. The terminal frames of the
+// discarded attempt are dropped, so a retried turn shows a single answer.
+func NormalizeStreamWithRetry(src io.Reader, retry StreamRetry) io.Reader {
+	return newNormalizeReader(src, retry)
+}
+
+func newNormalizeReader(src io.Reader, retry StreamRetry) *normalizeReader {
+	reader := &normalizeReader{src: bufio.NewReaderSize(src, 64*1024), retry: retry, attempt: 1, maxAttempts: 1}
+	if retry != nil {
+		reader.maxAttempts = 2
+	}
+	return reader
 }
 
 type normalizeReader struct {
@@ -46,8 +65,21 @@ type normalizeReader struct {
 	// answers counts the frames that carried an answer (text or a tool call)
 	// and lastPayload keeps the most recent raw frame for diagnosis.
 	answers int
-	// reported guards the single diagnostic line per stream.
+	// reported guards the single diagnostic line per attempt.
 	reported bool
+	// retry asks for one more upstream attempt when an attempt ends without a
+	// usable answer; maxAttempts bounds the attempts.
+	retry       StreamRetry
+	attempt     int
+	maxAttempts int
+	// tail holds the terminal frames (finish reason, upstream error frame, done
+	// marker) until the answer is known, so a discarded attempt leaves nothing
+	// behind on the client.
+	tail bytes.Buffer
+	// pending holds frames that render nothing until something meaningful
+	// follows; they are dropped together with a discarded attempt.
+	pending bytes.Buffer
+	sawDone bool
 	// forwarded counts the frames the client really receives with usable
 	// content: text, or a tool call whose function name is known. A stream
 	// whose raw frames carried tool calls but forwarded none leaves a strict
@@ -75,7 +107,7 @@ func (r *normalizeReader) fill() {
 	line, err := r.src.ReadString('\n')
 	if err != nil && line == "" {
 		if err == io.EOF {
-			r.fillTail()
+			r.finishStream()
 			return
 		}
 		r.err = err
@@ -86,7 +118,7 @@ func (r *normalizeReader) fill() {
 		// Comments and blank separators carry no payload; the rewritten frames
 		// bring their own separators.
 		if err == io.EOF {
-			r.fillTail()
+			r.finishStream()
 		}
 		return
 	}
@@ -95,37 +127,86 @@ func (r *normalizeReader) fill() {
 		r.lastPayload = payload
 	}
 	if payload == "[DONE]" {
-		r.done = true
-		r.reportStream()
-		r.buffer.WriteString("data: [DONE]\n\n")
+		r.sawDone = true
+		r.tail.WriteString("data: [DONE]\n\n")
+		r.finishStream()
 		return
 	}
-	for _, rewritten := range r.rewrite(payload) {
-		r.buffer.WriteString("data: ")
-		r.buffer.WriteString(rewritten)
-		r.buffer.WriteString("\n\n")
+	for _, frame := range r.rewrite(payload) {
+		switch {
+		case frame.terminal:
+			writeFrame(&r.tail, frame.payload)
+		case !frame.meaningful:
+			// A frame that renders nothing (role only, empty delta) waits until
+			// something meaningful follows, so a discarded attempt leaves no
+			// frames at all on the client.
+			writeFrame(&r.pending, frame.payload)
+		default:
+			r.flushPending()
+			writeFrame(&r.buffer, frame.payload)
+		}
 	}
 	if err == io.EOF {
-		r.fillTail()
+		r.finishStream()
 	}
 }
 
-// fillTail closes the stream. An upstream that stopped without sending any
-// answer is reported as a failure: a silent end makes strict clients show a
-// generic disconnect message, while an error frame names the real cause.
-func (r *normalizeReader) fillTail() {
+// finishStream closes one upstream attempt. An attempt that carried no usable
+// answer is retried once when a retry source is configured; the held terminal
+// frames of that attempt are dropped, so the client only sees the answer that
+// survives. Without a retry, or after the last attempt, a silent end is
+// reported as a failure because strict clients would otherwise show a generic
+// disconnect message.
+func (r *normalizeReader) finishStream() {
+	if r.done {
+		return
+	}
 	r.reportStream()
-	if !r.done {
-		if r.forwarded == 0 {
-			common.SysError(fmt.Sprintf("workbuddy upstream stream ended without an answer, last frame: %s", truncateFrame(r.lastPayload)))
-			r.buffer.WriteString("data: {\"error\":{\"message\":\"upstream stream ended without an answer\",\"type\":\"upstream_error\"}}\n\n")
+	if r.forwarded == 0 && r.retry != nil && r.attempt < r.maxAttempts {
+		next, err := r.retry()
+		if err == nil && next != nil {
+			r.restart(next)
+			return
+		}
+		if err != nil {
+			common.SysError(fmt.Sprintf("workbuddy relay retry failed: %v", err))
 		}
 	}
-	if !r.done {
-		r.done = true
+	r.flushPending()
+	if r.forwarded == 0 {
+		common.SysError(fmt.Sprintf("workbuddy upstream stream ended without an answer, last frame: %s", truncateFrame(r.lastPayload)))
+		r.buffer.WriteString("data: {\"error\":{\"message\":\"upstream stream ended without an answer\",\"type\":\"upstream_error\"}}\n\n")
+	}
+	r.done = true
+	r.buffer.Write(r.tail.Bytes())
+	r.tail.Reset()
+	if !r.sawDone {
 		r.buffer.WriteString("data: [DONE]\n\n")
 	}
 	r.err = io.EOF
+}
+
+// restart switches to another upstream attempt. Everything the discarded
+// attempt held is dropped and the per-stream state starts over.
+func (r *normalizeReader) restart(next io.ReadCloser) {
+	r.src = bufio.NewReaderSize(next, 64*1024)
+	r.attempt++
+	r.tail.Reset()
+	r.pending.Reset()
+	r.sawDone = false
+	r.reported = false
+	r.answers = 0
+	r.forwarded = 0
+	r.toolFrames = nil
+	r.toolCallNames = map[int]bool{}
+	r.toolCallPending = nil
+	r.toolCallEnvelope = nil
+	r.toolCallIndexByID = map[string]int{}
+	r.toolCallIDByIndex = map[int]string{}
+	r.nextToolCallIndex = 0
+	r.lastToolCallIndex = 0
+	r.seenID = ""
+	r.lastPayload = ""
 }
 
 // recordToolFrame keeps the first fragments of a stream that carry a function
@@ -154,8 +235,8 @@ func (r *normalizeReader) reportStream() {
 		return
 	}
 	common.SysError(fmt.Sprintf(
-		"workbuddy relay stream: answers=%d forwarded=%d calls=%s held=%s last=%s",
-		r.answers, r.forwarded, truncateFrame(strings.Join(r.toolFrames, " ")), truncateFrame(r.heldPayload()), truncateFrame(r.lastPayload)))
+		"workbuddy relay stream: attempt=%d answers=%d forwarded=%d calls=%s held=%s last=%s",
+		r.attempt, r.answers, r.forwarded, truncateFrame(strings.Join(r.toolFrames, " ")), truncateFrame(r.heldPayload()), truncateFrame(r.lastPayload)))
 }
 
 // heldPayload renders the tool call fragments that never received a name, so a
@@ -256,15 +337,16 @@ func truncateFrame(payload string) string {
 	return payload[:400] + "..."
 }
 
-func (r *normalizeReader) rewrite(payload string) []string {
+func (r *normalizeReader) rewrite(payload string) []normalizedFrame {
 	var frame map[string]any
 	if err := json.Unmarshal([]byte(payload), &frame); err != nil {
-		return []string{payload}
+		return []normalizedFrame{{payload: payload}}
 	}
 	if _, isError := frame["error"]; isError {
 		// Error frames keep their original fields so the client sees the
-		// upstream code and message.
-		return []string{payload}
+		// upstream code and message. They end the answer and are therefore
+		// held like a finish frame.
+		return []normalizedFrame{{payload: payload, terminal: true}}
 	}
 	if r.seenID == "" {
 		if id, ok := frame["id"].(string); ok && id != "" {
@@ -278,11 +360,13 @@ func (r *normalizeReader) rewrite(payload string) []string {
 	}
 	r.countAnswer(frame)
 	released := r.splitToolCalls(frame)
-	rewritten := make([]string, 0, 2)
+	rewritten := make([]normalizedFrame, 0, 2)
 	if released != nil {
 		r.forwarded++
 		if out, err := json.Marshal(normalizeFrame(released)); err == nil {
-			rewritten = append(rewritten, string(out))
+			// A released frame always carries a named tool call, so it renders
+			// on the client and goes out at once.
+			rewritten = append(rewritten, normalizedFrame{payload: string(out), meaningful: true})
 		}
 	}
 	if frameCarriesAnswer(frame) {
@@ -290,9 +374,115 @@ func (r *normalizeReader) rewrite(payload string) []string {
 	}
 	out, err := json.Marshal(normalizeFrame(frame))
 	if err != nil {
-		return []string{payload}
+		return []normalizedFrame{{payload: payload}}
 	}
-	return append(rewritten, string(out))
+	return append(rewritten, normalizedFrame{
+		payload:    string(out),
+		terminal:   frameIsTerminal(frame),
+		meaningful: frameIsMeaningful(frame),
+	})
+}
+
+// flushPending sends the frames that render nothing, so the client sees them in
+// front of the frame that follows.
+func (r *normalizeReader) flushPending() {
+	if r.pending.Len() == 0 {
+		return
+	}
+	r.buffer.Write(r.pending.Bytes())
+	r.pending.Reset()
+}
+
+// writeFrame appends one server sent event frame to a buffer.
+func writeFrame(target *bytes.Buffer, payload string) {
+	target.WriteString("data: ")
+	target.WriteString(payload)
+	target.WriteString("\n\n")
+}
+
+// frameIsMeaningful reports whether a frame renders something on the client.
+func frameIsMeaningful(frame map[string]any) bool {
+	choices, ok := frame["choices"].([]any)
+	if !ok {
+		return false
+	}
+	for _, rawChoice := range choices {
+		choice, ok := rawChoice.(map[string]any)
+		if !ok {
+			continue
+		}
+		if reason, ok := choice["finish_reason"].(string); ok && reason != "" {
+			return true
+		}
+		source, ok := toolCallSource(choice)
+		if !ok {
+			continue
+		}
+		for _, key := range []string{"content", "reasoning_content", "refusal"} {
+			if text, ok := source[key].(string); ok && strings.TrimSpace(text) != "" {
+				return true
+			}
+		}
+		if calls, ok := source["tool_calls"].([]any); ok && len(calls) > 0 {
+			return true
+		}
+		if call, ok := source["function_call"].(map[string]any); ok && len(call) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// normalizedFrame is one rewritten frame. Terminal frames close the answer and
+// wait in the tail until the answer is known to be usable.
+type normalizedFrame struct {
+	payload    string
+	terminal   bool
+	meaningful bool
+}
+
+// frameIsTerminal reports whether a frame carries the finish reason.
+func frameIsTerminal(frame map[string]any) bool {
+	choices, ok := frame["choices"].([]any)
+	if !ok {
+		return false
+	}
+	for _, rawChoice := range choices {
+		choice, ok := rawChoice.(map[string]any)
+		if !ok {
+			continue
+		}
+		if reason, ok := choice["finish_reason"].(string); ok && reason != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// HasUsableAnswer reports whether an aggregated chat completion carries text or
+// a tool call. The relay uses it to retry an upstream that answered with an
+// empty turn.
+func HasUsableAnswer(raw []byte) bool {
+	var answer struct {
+		Choices []struct {
+			Message struct {
+				Content   *string `json:"content"`
+				ToolCalls []any   `json:"tool_calls"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+	if err := json.Unmarshal(raw, &answer); err != nil {
+		return false
+	}
+	for _, choice := range answer.Choices {
+		if choice.Message.Content != nil && strings.TrimSpace(*choice.Message.Content) != "" {
+			return true
+		}
+		if len(choice.Message.ToolCalls) > 0 {
+			return true
+		}
+	}
+	return false
 }
 
 // splitToolCalls normalizes the tool call fragments of one frame and returns an

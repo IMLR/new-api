@@ -136,3 +136,93 @@ func TestErrorResponseReplacesStatusAndBody(t *testing.T) {
 	raw, _ := io.ReadAll(rewritten.Body)
 	assert.Contains(t, string(raw), "slow down")
 }
+
+func TestStreamBodyRetriesEmptyAttempt(t *testing.T) {
+	// The upstream sometimes streams a tool call without its header frame. That
+	// attempt renders nothing, so the adaptor asks for one more and only the
+	// surviving answer reaches the client.
+	broken := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\"}}]},\"finish_reason\":\"tool_calls\"}]}",
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	good := strings.Join([]string{
+		"data: {\"id\":\"chunk-2\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}",
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, good)
+	}))
+	defer server.Close()
+
+	adaptor := &Adaptor{
+		base:       server.URL,
+		credential: &workbuddyapi.Credential{AccessToken: "token", UID: "uid"},
+	}
+	info := &relaycommon.RelayInfo{
+		RelayMode:   relayconstant.RelayModeChatCompletions,
+		ChannelMeta: &relaycommon.ChannelMeta{ChannelType: constant.ChannelTypeWorkBuddy},
+	}
+	stream := adaptor.streamBody(testContext(t, nil), info, []byte("{}"), nil,
+		io.NopCloser(strings.NewReader(broken)))
+	defer stream.Close()
+
+	out, err := io.ReadAll(stream)
+	require.NoError(t, err)
+	assert.Equal(t, 1, requests, "the empty attempt is retried once")
+	assert.Contains(t, string(out), "\"content\":\"ok\"")
+	assert.Contains(t, string(out), "chunk-2")
+	assert.NotContains(t, string(out), "chunk-1", "the discarded attempt leaves no frames behind")
+	assert.NotContains(t, string(out), "without an answer")
+}
+
+func TestOpenStreamKeepsFramesOfTheRetriedAttempt(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: {\"id\":\"chunk-3\",\"choices\":[]}\n\ndata: [DONE]\n\n")
+	}))
+	defer server.Close()
+
+	adaptor := &Adaptor{
+		base:       server.URL,
+		credential: &workbuddyapi.Credential{AccessToken: "token", UID: "uid"},
+	}
+	info := &relaycommon.RelayInfo{
+		RelayMode:   relayconstant.RelayModeChatCompletions,
+		ChannelMeta: &relaycommon.ChannelMeta{ChannelType: constant.ChannelTypeWorkBuddy},
+	}
+	body, err := adaptor.openStream(testContext(t, nil), info, []byte("{}"))
+	require.NoError(t, err)
+	defer body.Close()
+
+	out, err := io.ReadAll(body)
+	require.NoError(t, err)
+	assert.Contains(t, string(out), "chunk-3", "the peeked frame is replayed")
+	assert.Contains(t, string(out), "[DONE]")
+}
+
+func TestPeekStreamErrorKeepsFramesReadAhead(t *testing.T) {
+	// The peek stops at the first data frame, but the buffered reader may have
+	// pulled later frames off the wire already. Those bytes belong to the
+	// client and must survive the peek.
+	body := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[]}",
+		"",
+		"data: {\"id\":\"chunk-2\",\"choices\":[]}",
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	frameErr, prefix, err := peekStreamError(strings.NewReader(body))
+	require.NoError(t, err)
+	assert.Nil(t, frameErr)
+	assert.Contains(t, string(prefix), "chunk-1")
+	assert.Contains(t, string(prefix), "chunk-2", "frames read ahead are replayed")
+	assert.Contains(t, string(prefix), "[DONE]")
+}
