@@ -23,10 +23,15 @@ import (
 
 const ChannelName = "opencode_go"
 
-// sessionHeaders carry the conversation id. OpenCode Go asks clients to send
-// one so it can keep a conversation on one route and reuse prompt caches; the
-// headers are forwarded as is when the client sends them.
+// sessionHeaders carry the conversation id. OpenCode Go uses it to keep a
+// conversation on one route and to reuse prompt caches, and answers requests
+// without the header with 400 MissingSessionID.
 var sessionHeaders = []string{"x-opencode-session", "session_id"}
+
+// defaultUserAgent identifies this relay when the calling client sends none.
+// OpenCode Go asks clients to name themselves instead of relying on the HTTP
+// library default.
+const defaultUserAgent = "new-api"
 
 // Adaptor serves OpenCode Go. One subscription publishes three API families:
 // most models answer on chat completions, Qwen and MiniMax answer on Anthropic
@@ -81,24 +86,62 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, header *http.Header, info *
 	if err != nil {
 		return err
 	}
-	forwardSessionHeaders(c, header)
+	forwardSessionHeaders(c, header, info)
+	setUserAgent(c, header)
 	return nil
 }
 
-// forwardSessionHeaders copies the client conversation id, if any, so the
-// upstream can route the request and reuse the prompt cache of a conversation.
-func forwardSessionHeaders(c *gin.Context, header *http.Header) {
-	if c == nil || c.Request == nil {
-		return
-	}
+// forwardSessionHeaders writes the conversation id into the upstream headers.
+// A client value is forwarded as is; clients that send none, such as batch
+// jobs and the channel test, get a value derived from the channel and caller so
+// the upstream can still route the request.
+func forwardSessionHeaders(c *gin.Context, header *http.Header, info *relaycommon.RelayInfo) {
 	for _, name := range sessionHeaders {
 		if header.Get(name) != "" {
 			continue
 		}
-		if value := strings.TrimSpace(c.Request.Header.Get(name)); value != "" {
+		if value := clientHeaderValue(c, name); value != "" {
 			header.Set(name, value)
 		}
 	}
+	if header.Get("x-opencode-session") != "" {
+		return
+	}
+	// Coding agents such as Codex send their own session header instead.
+	if value := clientHeaderValue(c, "session_id"); value != "" {
+		header.Set("x-opencode-session", value)
+		return
+	}
+	if value := fallbackSessionID(info); value != "" {
+		header.Set("x-opencode-session", value)
+	}
+}
+
+func clientHeaderValue(c *gin.Context, name string) string {
+	if c == nil || c.Request == nil {
+		return ""
+	}
+	return strings.TrimSpace(c.Request.Header.Get(name))
+}
+
+// fallbackSessionID keeps requests of one channel, user and token on one
+// upstream session, which preserves routing and prompt cache reuse for clients
+// that send no conversation id of their own.
+func fallbackSessionID(info *relaycommon.RelayInfo) string {
+	if info == nil {
+		return ""
+	}
+	return fmt.Sprintf("new-api-%d-%d-%d", info.ChannelId, info.UserId, info.TokenId)
+}
+
+// setUserAgent forwards the calling client's own identification, so the
+// upstream sees a coding agent name rather than a generic HTTP client.
+func setUserAgent(c *gin.Context, header *http.Header) {
+	userAgent := clientHeaderValue(c, "User-Agent")
+	if userAgent == "" {
+		userAgent = defaultUserAgent
+	}
+	header.Set("User-Agent", userAgent)
 }
 
 func (a *Adaptor) ConvertOpenAIRequest(c *gin.Context, info *relaycommon.RelayInfo, request *dto.GeneralOpenAIRequest) (any, error) {

@@ -125,6 +125,57 @@ func TestSetupRequestHeaderForwardsClientSession(t *testing.T) {
 	assert.Equal(t, "sess-42", messagesHeaders.Get("x-opencode-session"))
 }
 
+func TestSetupRequestHeaderSynthesizesSession(t *testing.T) {
+	c, _ := testContext(t)
+	adaptor := &Adaptor{}
+	info := testRelayInfo("kimi-k3", relayconstant.RelayModeChatCompletions, types.RelayFormatOpenAI)
+	info.ChannelId = 19
+	info.UserId = 7
+	info.TokenId = 31
+
+	headers := http.Header{}
+	require.NoError(t, adaptor.SetupRequestHeader(c, &headers, info))
+	assert.Equal(t, "new-api-19-7-31", headers.Get("x-opencode-session"))
+
+	// The same caller keeps one session so upstream routing stays stable.
+	repeated := http.Header{}
+	require.NoError(t, adaptor.SetupRequestHeader(c, &repeated, info))
+	assert.Equal(t, headers.Get("x-opencode-session"), repeated.Get("x-opencode-session"))
+
+	otherCaller := testRelayInfo("kimi-k3", relayconstant.RelayModeChatCompletions, types.RelayFormatOpenAI)
+	otherCaller.ChannelId = 19
+	otherCaller.UserId = 8
+	otherCaller.TokenId = 31
+	otherHeaders := http.Header{}
+	require.NoError(t, adaptor.SetupRequestHeader(c, &otherHeaders, otherCaller))
+	assert.NotEqual(t, headers.Get("x-opencode-session"), otherHeaders.Get("x-opencode-session"))
+}
+
+func TestSetupRequestHeaderUsesClientSessionIDFallback(t *testing.T) {
+	c, _ := testContext(t)
+	c.Request.Header.Set("session_id", "codex-session")
+	adaptor := &Adaptor{}
+
+	headers := http.Header{}
+	require.NoError(t, adaptor.SetupRequestHeader(c, &headers, testRelayInfo("kimi-k3", relayconstant.RelayModeChatCompletions, types.RelayFormatOpenAI)))
+	assert.Equal(t, "codex-session", headers.Get("x-opencode-session"))
+}
+
+func TestSetupRequestHeaderSendsClientUserAgent(t *testing.T) {
+	c, _ := testContext(t)
+	c.Request.Header.Set("User-Agent", "my-coding-agent/1.0")
+	adaptor := &Adaptor{}
+
+	headers := http.Header{}
+	require.NoError(t, adaptor.SetupRequestHeader(c, &headers, testRelayInfo("kimi-k3", relayconstant.RelayModeChatCompletions, types.RelayFormatOpenAI)))
+	assert.Equal(t, "my-coding-agent/1.0", headers.Get("User-Agent"))
+
+	anonymous, _ := testContext(t)
+	fallbackHeaders := http.Header{}
+	require.NoError(t, adaptor.SetupRequestHeader(anonymous, &fallbackHeaders, testRelayInfo("kimi-k3", relayconstant.RelayModeChatCompletions, types.RelayFormatOpenAI)))
+	assert.Equal(t, "new-api", fallbackHeaders.Get("User-Agent"))
+}
+
 func TestConvertOpenAIRequestFollowsModelWire(t *testing.T) {
 	c, _ := testContext(t)
 	adaptor := &Adaptor{}

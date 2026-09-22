@@ -37,7 +37,17 @@ OpenCode Go 按模型分成三个接口，同一个订阅的密钥通用：
 
 ## 会话标识
 
-OpenCode 要求客户端为每个会话发送稳定的会话 ID（`x-opencode-session`），上游用它做路由优化和提示缓存。客户端带了这个请求头时，中转原样转发；代码类客户端带的 `session_id` 也一并转发。客户端不带时上游仍可服务，只是这类请求无法复用会话路由与缓存。
+OpenCode 要求客户端为每个会话发送稳定的会话 ID（`x-opencode-session`），上游用它做路由优化和提示缓存。部分上游线路把它当成硬性要求：缺少这个请求头时返回 `400 MissingSessionID`（错误正文为 `Request is missing x-opencode-session and cannot be routed efficiently`）。
+
+中转的处理顺序：
+
+1. 客户端带了 `x-opencode-session` 时原样转发。
+2. 只带了 `session_id` 的代码类客户端（例如 Codex），用它填 `x-opencode-session`。
+3. 两者都没有时，用渠道 ID、用户 ID 和令牌 ID 拼出稳定值 `new-api-<渠道>-<用户>-<令牌>`。同一个调用方重复请求复用同一个会话标识，上游的路由选择和提示缓存仍然有效。
+
+渠道测试与批量任务属于第 3 种情况，因此也能通过需要会话标识的线路。
+
+上游同时要求客户端表明自身身份，不要使用 HTTP 库的默认名称。中转转发客户端自带的 `User-Agent`；客户端没有带时使用 `new-api`。
 
 ## 订阅限额
 
@@ -60,7 +70,12 @@ OpenCode 要求客户端为每个会话发送稳定的会话 ID（`x-opencode-se
 
 解析同时兼容旧版字段（`resetInSec` 倒计时、只有 `used` 和 `limit` 的写法），上游格式变化时渠道页仍能显示。
 
-常见错误：`401 AuthError`（缺少或无效密钥）、`403 EntitlementError`（密钥有效但没有 Go 订阅）、`403 RegionError`（模型不在当前地区开放，例如 Muse Spark）。
+常见错误：
+
+- `401 AuthError`：缺少或无效密钥。
+- `400 MissingSessionID`：上游线路要求会话标识。中转会补齐，正常调用不会出现；出现时说明有别的客户端绕过了中转。
+- `403 EntitlementError`：密钥有效但没有 Go 订阅。
+- `403 RegionError`：模型不在当前地区开放。Muse Spark 受 Meta 的地区政策限制；`deepseek-v4.1-flash`、`deepseek-flash`、`deepseek-v4-flash`、`deepseek-v4-pro` 只在中国境内托管，需要按错误正文里的链接到工作区的 Go 页面开启，否则返回 `The latest version of this model is only available hosted in China and requires explicit opt in`。
 
 ## 渠道页面查看限额
 
@@ -86,3 +101,11 @@ OpenCode 要求客户端为每个会话发送稳定的会话 ID（`x-opencode-se
 - 用量返回体的字段（`status`、`percent`、`resetsAt`）来自上游源码 `packages/console/app/src/routes/zen/go/v1/usage.ts`。
 
 请求转换、接口分派、鉴权请求头和会话标识转发由 `relay/channel/opencode/adaptor_test.go` 覆盖；用量解析由 `pkg/opencode/usage_test.go` 覆盖；额度接口由 `controller/opencode_quota_test.go` 和 `service/opencode_test.go` 覆盖。
+
+### 真实订阅复核（2026-09-22，渠道 19）
+
+部署在 `aihk.imlr.dev` 的实例用真实 Go 订阅复核后的结果：
+
+- 模型目录、密钥校验和订阅限额读取都正常：额度对话框显示 5 小时、每周、每月三个窗口，密钥尾号与重置时间与上游一致。
+- 自动渠道测试对 GLM、MiMo、Grok 等模型返回 `400 MissingSessionID`，说明会话标识在上游是硬性要求。中转补齐会话标识后由 `adaptor_test.go` 覆盖；渠道测试此后携带该请求头。
+- `deepseek-v4.1-flash` 返回 `403 RegionError`，属于工作区地区设置，按错误正文里的链接开启中国境内托管后可用。
