@@ -16,6 +16,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/pkg/cline"
 	opencodeapi "github.com/QuantumNous/new-api/pkg/opencode"
+	workbuddyapi "github.com/QuantumNous/new-api/pkg/workbuddy"
 	relaychannel "github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/ollama"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -543,6 +544,24 @@ func validateChannel(channel *model.Channel, isAdd bool) error {
 			channel.Key = key
 		}
 	}
+	// WorkBuddy stores one account credential: the CodeBuddy OAuth tokens plus
+	// the account identity the upstream headers need.
+	if channel.Type == constant.ChannelTypeWorkBuddy {
+		if channel.ChannelInfo.IsMultiKey {
+			return fmt.Errorf("WorkBuddy requires a single-credential channel")
+		}
+		if isAdd || strings.TrimSpace(channel.Key) != "" {
+			credential, err := workbuddyapi.ParseCredential(channel.Key)
+			if err != nil {
+				return err
+			}
+			encoded, err := common.Marshal(credential)
+			if err != nil {
+				return err
+			}
+			channel.Key = string(encoded)
+		}
+	}
 	// Codex OAuth key validation (optional, only when JSON object is provided)
 	if channel.Type == constant.ChannelTypeCodex {
 		trimmedKey := strings.TrimSpace(channel.Key)
@@ -660,6 +679,10 @@ func AddChannel(c *gin.Context) {
 	}
 	if addChannelRequest.Channel.Type == constant.ChannelTypeOpenCodeGo && addChannelRequest.Mode != "single" && addChannelRequest.Mode != "" {
 		common.ApiError(c, fmt.Errorf("OpenCode Go requires a single-key channel"))
+		return
+	}
+	if addChannelRequest.Channel.Type == constant.ChannelTypeWorkBuddy && addChannelRequest.Mode != "single" && addChannelRequest.Mode != "" {
+		common.ApiError(c, fmt.Errorf("WorkBuddy requires a single-credential channel"))
 		return
 	}
 	addChannelRequest.Channel.CreatedTime = common.GetTimestamp()
@@ -1339,7 +1362,7 @@ func FetchModels(c *gin.Context) {
 		}
 
 		key := strings.TrimSpace(req.Key)
-		if req.Type != constant.ChannelTypeCodex && req.Type != constant.ChannelTypeCline && req.Type != constant.ChannelTypeOpenCodeGo {
+		if req.Type != constant.ChannelTypeCodex && req.Type != constant.ChannelTypeCline && req.Type != constant.ChannelTypeOpenCodeGo && req.Type != constant.ChannelTypeWorkBuddy {
 			key = strings.Split(key, "\n")[0]
 		}
 		channel = &model.Channel{
@@ -1349,7 +1372,7 @@ func FetchModels(c *gin.Context) {
 		}
 	}
 
-	if channel.Type == constant.ChannelTypeCline && req.Proxy != nil {
+	if (channel.Type == constant.ChannelTypeCline || channel.Type == constant.ChannelTypeWorkBuddy) && req.Proxy != nil {
 		settings := channel.GetSetting()
 		settings.Proxy = strings.TrimSpace(*req.Proxy)
 		channel.SetSetting(settings)
@@ -1357,7 +1380,7 @@ func FetchModels(c *gin.Context) {
 	// Return rotated credentials only for unsaved, user-supplied Cline imports.
 	models, err := fetchChannelUpstreamModelIDs(channel)
 	credential := ""
-	if req.Type == constant.ChannelTypeCline && channel.Id == 0 {
+	if (req.Type == constant.ChannelTypeCline || req.Type == constant.ChannelTypeWorkBuddy) && channel.Id == 0 {
 		credential = channel.Key
 	}
 	response := gin.H{"success": err == nil, "message": ""}

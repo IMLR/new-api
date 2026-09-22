@@ -1,0 +1,443 @@
+package workbuddy
+
+import (
+	"bufio"
+	"bytes"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"sort"
+	"strings"
+)
+
+// ErrEmptyStream reports an upstream answer that carried no usable frame.
+var ErrEmptyStream = errors.New("workbuddy upstream stream contained no data frame")
+
+// NormalizeStream rewrites the upstream server sent events into the standard
+// shape: only known fields survive, empty deltas and placeholder tool calls are
+// dropped, and the stream always ends with a done marker.
+func NormalizeStream(src io.Reader) io.Reader {
+	return &normalizeReader{src: bufio.NewReaderSize(src, 64*1024)}
+}
+
+type normalizeReader struct {
+	src           *bufio.Reader
+	buffer        bytes.Buffer
+	seenID        string
+	toolCallNames map[int]bool
+	done          bool
+	err           error
+}
+
+func (r *normalizeReader) Read(p []byte) (int, error) {
+	for r.buffer.Len() == 0 {
+		if r.err != nil {
+			return 0, r.err
+		}
+		r.fill()
+	}
+	return r.buffer.Read(p)
+}
+
+func (r *normalizeReader) fill() {
+	line, err := r.src.ReadString('\n')
+	if err != nil && line == "" {
+		if err == io.EOF {
+			if !r.done {
+				r.done = true
+				r.buffer.WriteString("data: [DONE]\n\n")
+				return
+			}
+			r.err = io.EOF
+			return
+		}
+		r.err = err
+		return
+	}
+	trimmed := strings.TrimRight(line, "\r\n")
+	if !strings.HasPrefix(strings.TrimSpace(trimmed), "data:") {
+		// Comments and blank separators carry no payload; the rewritten frames
+		// bring their own separators.
+		if err == io.EOF {
+			r.fillTail()
+		}
+		return
+	}
+	payload := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(trimmed), "data:"))
+	if payload == "[DONE]" {
+		r.done = true
+		r.buffer.WriteString("data: [DONE]\n\n")
+		return
+	}
+	rewritten := r.rewrite(payload)
+	r.buffer.WriteString("data: ")
+	r.buffer.WriteString(rewritten)
+	r.buffer.WriteString("\n\n")
+	if err == io.EOF {
+		r.fillTail()
+	}
+}
+
+// fillTail appends the closing marker when the source ended without one.
+func (r *normalizeReader) fillTail() {
+	if !r.done {
+		r.done = true
+		r.buffer.WriteString("data: [DONE]\n\n")
+	}
+	r.err = io.EOF
+}
+
+func (r *normalizeReader) rewrite(payload string) string {
+	var frame map[string]any
+	if err := json.Unmarshal([]byte(payload), &frame); err != nil {
+		return payload
+	}
+	if _, isError := frame["error"]; isError {
+		// Error frames keep their original fields so the client sees the
+		// upstream code and message.
+		return payload
+	}
+	if r.seenID == "" {
+		if id, ok := frame["id"].(string); ok && id != "" {
+			r.seenID = id
+		}
+	} else if id, ok := frame["id"].(string); !ok || id == "" {
+		frame["id"] = r.seenID
+	}
+	if r.toolCallNames == nil {
+		r.toolCallNames = map[int]bool{}
+	}
+	stripToolCallNames(frame, r.toolCallNames)
+	out, err := json.Marshal(normalizeFrame(frame))
+	if err != nil {
+		return payload
+	}
+	return string(out)
+}
+
+// normalizeFrame rebuilds one frame with only the fields the OpenAI streaming
+// shape defines.
+func normalizeFrame(frame map[string]any) map[string]any {
+	out := map[string]any{}
+	for _, key := range []string{"id", "object", "created", "model", "system_fingerprint", "service_tier"} {
+		if value, ok := frame[key]; ok && value != nil {
+			out[key] = value
+		}
+	}
+	if _, ok := out["object"]; !ok {
+		out["object"] = "chat.completion.chunk"
+	}
+	if _, ok := out["id"]; !ok {
+		out["id"] = "chatcmpl-workbuddy"
+	}
+	if choices, ok := frame["choices"].([]any); ok {
+		normalized := make([]any, 0, len(choices))
+		for _, rawChoice := range choices {
+			choice, ok := rawChoice.(map[string]any)
+			if !ok {
+				continue
+			}
+			current := map[string]any{}
+			if index, ok := choice["index"]; ok {
+				current["index"] = index
+			}
+			delta := map[string]any{}
+			if rawDelta, ok := choice["delta"].(map[string]any); ok {
+				if value, ok := rawDelta["role"].(string); ok && value != "" {
+					delta["role"] = value
+				}
+				if value, ok := rawDelta["content"].(string); ok && value != "" {
+					delta["content"] = value
+				}
+				if value, ok := rawDelta["reasoning_content"].(string); ok && value != "" {
+					delta["reasoning_content"] = value
+				}
+				if value, ok := rawDelta["refusal"].(string); ok && value != "" {
+					delta["refusal"] = value
+				}
+				if calls, ok := rawDelta["tool_calls"].([]any); ok && len(calls) > 0 {
+					delta["tool_calls"] = calls
+				}
+				if functionCall, ok := rawDelta["function_call"]; ok && functionCall != nil {
+					// A placeholder with empty name and arguments carries nothing.
+					keep := true
+					if legacy, ok := functionCall.(map[string]any); ok {
+						name, _ := legacy["name"].(string)
+						arguments, _ := legacy["arguments"].(string)
+						keep = name != "" || arguments != ""
+					}
+					if keep {
+						delta["function_call"] = functionCall
+					}
+				}
+			}
+			current["delta"] = delta
+			if reason, ok := choice["finish_reason"].(string); ok && reason != "" {
+				current["finish_reason"] = reason
+			} else {
+				current["finish_reason"] = nil
+			}
+			normalized = append(normalized, current)
+		}
+		out["choices"] = normalized
+	}
+	if usage, ok := frame["usage"]; ok {
+		out["usage"] = usage
+	} else {
+		out["usage"] = nil
+	}
+	return out
+}
+
+// stripToolCallNames keeps the function name on the first fragment of a tool
+// call only, which is what the OpenAI stream shape prescribes. seen carries the
+// indexes already introduced earlier in the same stream.
+func stripToolCallNames(frame map[string]any, seen map[int]bool) {
+	choices, ok := frame["choices"].([]any)
+	if !ok {
+		return
+	}
+	for _, rawChoice := range choices {
+		choice, ok := rawChoice.(map[string]any)
+		if !ok {
+			continue
+		}
+		delta, ok := choice["delta"].(map[string]any)
+		if !ok {
+			continue
+		}
+		calls, ok := delta["tool_calls"].([]any)
+		if !ok {
+			continue
+		}
+		for _, rawCall := range calls {
+			call, ok := rawCall.(map[string]any)
+			if !ok {
+				continue
+			}
+			function, ok := call["function"].(map[string]any)
+			if !ok {
+				continue
+			}
+			index, ok := call["index"].(float64)
+			if !ok {
+				continue
+			}
+			if !seen[int(index)] {
+				seen[int(index)] = true
+				continue
+			}
+			delete(function, "name")
+		}
+	}
+}
+
+// AggregateStream folds a normalized stream into one non-streaming chat
+// completion answer, which is what a client asking for a plain response needs.
+func AggregateStream(src io.Reader) ([]byte, error) {
+	reader := bufio.NewReaderSize(src, 64*1024)
+	var (
+		id           string
+		model        string
+		created      any
+		content      strings.Builder
+		reasoning    strings.Builder
+		finishReason = "stop"
+		usage        map[string]any
+		frames       int
+	)
+	toolCalls := map[int]map[string]any{}
+	var toolOrder []int
+	nextIndex := 0
+	indexByID := map[string]int{}
+	for {
+		line, err := reader.ReadString('\n')
+		if err != nil && line == "" {
+			if err == io.EOF {
+				break
+			}
+			return nil, err
+		}
+		trimmed := strings.TrimSpace(strings.TrimRight(line, "\r\n"))
+		if !strings.HasPrefix(trimmed, "data:") {
+			if err == io.EOF {
+				break
+			}
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
+		if payload == "[DONE]" {
+			break
+		}
+		var frame map[string]any
+		if json.Unmarshal([]byte(payload), &frame) != nil {
+			continue
+		}
+		if upstreamErr, ok := frame["error"]; ok {
+			encoded, _ := json.Marshal(upstreamErr)
+			return nil, fmt.Errorf("upstream error frame: %s", string(encoded))
+		}
+		frames++
+		if value, ok := frame["id"].(string); ok && value != "" && id == "" {
+			id = value
+		}
+		if value, ok := frame["model"].(string); ok && value != "" {
+			model = value
+		}
+		if value, ok := frame["created"]; ok && created == nil {
+			created = value
+		}
+		if value, ok := frame["usage"].(map[string]any); ok {
+			usage = value
+		}
+		choices, ok := frame["choices"].([]any)
+		if !ok {
+			continue
+		}
+		for _, rawChoice := range choices {
+			choice, ok := rawChoice.(map[string]any)
+			if !ok {
+				continue
+			}
+			if delta, ok := choice["delta"].(map[string]any); ok {
+				if text, ok := delta["content"].(string); ok {
+					content.WriteString(text)
+				}
+				if text, ok := delta["reasoning_content"].(string); ok {
+					reasoning.WriteString(text)
+				}
+				if calls, ok := delta["tool_calls"].([]any); ok {
+					mergeToolCalls(toolCalls, &toolOrder, indexByID, calls, &nextIndex)
+				}
+			}
+			if reason, ok := choice["finish_reason"].(string); ok && reason != "" {
+				finishReason = reason
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+	}
+	if frames == 0 {
+		return nil, ErrEmptyStream
+	}
+	message := map[string]any{"role": "assistant", "content": content.String()}
+	if reasoning.Len() > 0 {
+		message["reasoning_content"] = reasoning.String()
+	}
+	if len(toolOrder) > 0 {
+		calls := make([]any, 0, len(toolOrder))
+		for _, index := range toolOrder {
+			calls = append(calls, toolCalls[index])
+		}
+		message["tool_calls"] = calls
+	}
+	if id == "" {
+		id = "chatcmpl-workbuddy"
+	}
+	if created == nil {
+		created = float64(0)
+	}
+	answer := map[string]any{
+		"id":      id,
+		"object":  "chat.completion",
+		"created": created,
+		"model":   model,
+		"choices": []any{map[string]any{
+			"index":         0,
+			"message":       message,
+			"finish_reason": finishReason,
+		}},
+	}
+	if usage != nil {
+		answer["usage"] = ensureUsageTotal(usage)
+	}
+	return json.Marshal(answer)
+}
+
+// mergeToolCalls accumulates the streamed tool call fragments. Fragments
+// without an index are matched by their id, and unknown ones start a new call.
+func mergeToolCalls(acc map[int]map[string]any, order *[]int, indexByID map[string]int, calls []any, nextIndex *int) {
+	for _, raw := range calls {
+		call, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		index := -1
+		if value, ok := call["index"].(float64); ok {
+			index = int(value)
+		} else if id, ok := call["id"].(string); ok && id != "" {
+			if known, seen := indexByID[id]; seen {
+				index = known
+			} else {
+				index = allocateIndex(acc, nextIndex)
+			}
+		} else if len(*order) > 0 {
+			index = (*order)[len(*order)-1]
+		} else {
+			index = allocateIndex(acc, nextIndex)
+		}
+		merged, seen := acc[index]
+		if !seen {
+			merged = map[string]any{"index": index, "type": "function", "function": map[string]any{}}
+			acc[index] = merged
+			*order = append(*order, index)
+		}
+		if id, ok := call["id"].(string); ok && id != "" {
+			indexByID[id] = index
+			merged["id"] = id
+		}
+		function, ok := call["function"].(map[string]any)
+		if !ok {
+			continue
+		}
+		target, _ := merged["function"].(map[string]any)
+		if target == nil {
+			target = map[string]any{}
+			merged["function"] = target
+		}
+		if name, ok := function["name"].(string); ok && name != "" {
+			target["name"] = name
+		}
+		if arguments, ok := function["arguments"].(string); ok {
+			existing, _ := target["arguments"].(string)
+			target["arguments"] = existing + arguments
+		}
+	}
+}
+
+func allocateIndex(acc map[int]map[string]any, nextIndex *int) int {
+	for {
+		index := *nextIndex
+		*nextIndex = index + 1
+		if _, used := acc[index]; !used {
+			return index
+		}
+	}
+}
+
+// ensureUsageTotal fills total_tokens when the upstream reports the prompt and
+// completion counts only.
+func ensureUsageTotal(usage map[string]any) map[string]any {
+	if _, ok := usage["total_tokens"]; ok {
+		return usage
+	}
+	prompt, okPrompt := usage["prompt_tokens"].(float64)
+	completion, okCompletion := usage["completion_tokens"].(float64)
+	if !okPrompt || !okCompletion {
+		return usage
+	}
+	usage["total_tokens"] = prompt + completion
+	return usage
+}
+
+// SortedToolIndexes is a helper for tests and callers that need a stable order.
+func SortedToolIndexes(indexes map[int]map[string]any) []int {
+	out := make([]int, 0, len(indexes))
+	for index := range indexes {
+		out = append(out, index)
+	}
+	sort.Ints(out)
+	return out
+}

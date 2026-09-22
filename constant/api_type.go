@@ -40,5 +40,6 @@ const (
 	APITypeSub2API
 	APITypeCline
 	APITypeOpenCodeGo
+	APITypeWorkBuddy
 	APITypeDummy // this one is only for count, do not add any channel after this
 )

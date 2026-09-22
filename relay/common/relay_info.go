@@ -325,6 +325,7 @@ func (info *RelayInfo) ToString() string {
 var streamSupportedChannels = map[int]bool{
 	constant.ChannelTypeCline:          true,
 	constant.ChannelTypeOpenCodeGo:     true,
+	constant.ChannelTypeWorkBuddy:      true,
 	constant.ChannelTypeOpenAI:         true,
 	constant.ChannelTypeAnthropic:      true,
 	constant.ChannelTypeAws:            true,

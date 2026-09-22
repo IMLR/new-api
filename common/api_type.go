@@ -77,6 +77,8 @@ func ChannelType2APIType(channelType int) (int, bool) {
 		apiType = constant.APITypeCline
 	case constant.ChannelTypeOpenCodeGo:
 		apiType = constant.APITypeOpenCodeGo
+	case constant.ChannelTypeWorkBuddy:
+		apiType = constant.APITypeWorkBuddy
 	case constant.ChannelTypeCodex:
 		apiType = constant.APITypeCodex
 	case constant.ChannelTypeAdvancedCustom:

@@ -47,6 +47,7 @@ import (
 	"github.com/QuantumNous/new-api/relay/channel/tencent"
 	"github.com/QuantumNous/new-api/relay/channel/vertex"
 	"github.com/QuantumNous/new-api/relay/channel/volcengine"
+	"github.com/QuantumNous/new-api/relay/channel/workbuddy"
 	"github.com/QuantumNous/new-api/relay/channel/xai"
 	"github.com/QuantumNous/new-api/relay/channel/xunfei"
 	"github.com/QuantumNous/new-api/relay/channel/zhipu"
@@ -126,6 +127,8 @@ func GetAdaptor(apiType int) channel.Adaptor {
 		return &cline.Adaptor{}
 	case constant.APITypeOpenCodeGo:
 		return &opencode.Adaptor{}
+	case constant.APITypeWorkBuddy:
+		return &workbuddy.Adaptor{}
 	case constant.APITypeCodex:
 		return &codex.Adaptor{}
 	case constant.APITypeAdvancedCustom:
