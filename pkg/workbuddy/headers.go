@@ -15,7 +15,6 @@ type ChatMeta struct {
 	ConversationID        string
 	ConversationRequestID string
 	TraceID               string
-	ClientIP              string
 }
 
 const (
@@ -93,7 +92,6 @@ func ChatHeaders(h http.Header, cred *Credential, meta ChatMeta) {
 		h.Set("X-Domain", "www.workbuddy.ai")
 	}
 	injectAttribution(h)
-	injectClientIP(h, meta.ClientIP)
 	injectDeviceToken(h, cred)
 	injectConversationHeaders(h, meta)
 }
@@ -174,15 +172,6 @@ func injectAttribution(h http.Header) {
 	h.Set("X-IDE-Type", "WorkBuddy")
 	h.Set("X-IDE-Version", ClientVersion)
 	h.Set("X-Product", "WorkBuddy")
-}
-
-func injectClientIP(h http.Header, clientIP string) {
-	if strings.TrimSpace(clientIP) == "" {
-		return
-	}
-	h.Set("X-Forwarded-For", clientIP)
-	h.Set("X-Real-IP", clientIP)
-	h.Set("X-Client-IP", clientIP)
 }
 
 // injectConversationHeaders writes the conversation family: the conversation

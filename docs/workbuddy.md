@@ -59,7 +59,7 @@
 | `X-Conversation-Message-ID` / `X-Request-ID` | 每条消息新生成的 32 位十六进制 |
 | `X-B3-TraceId` / `X-B3-SpanId` / `X-B3-Sampled` | B3 链路头，请求标识不是合法 B3 值时回落到消息标识 |
 
-客户端 IP 透传默认关闭，与反代安全边界一致。
+客户端 IP 不向上游转发（参考实现的 `passthrough_ip` 默认也是关闭），上游看到的是中转服务器的地址。
 
 ## 请求体改写
 

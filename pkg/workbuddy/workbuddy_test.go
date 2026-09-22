@@ -183,7 +183,7 @@ func TestChatHeadersCarryProtocolFields(t *testing.T) {
 	}
 	const requestID = "0123456789abcdef0123456789abcdef"
 	headers := http.Header{}
-	ChatHeaders(headers, credential, ChatMeta{ConversationID: "conv-9", ConversationRequestID: requestID, ClientIP: "203.0.113.7"})
+	ChatHeaders(headers, credential, ChatMeta{ConversationID: "conv-9", ConversationRequestID: requestID})
 
 	assert.Equal(t, "Bearer at-1", headers.Get("Authorization"))
 	assert.Equal(t, "1", headers.Get("X-CodeBuddy-Request"))
@@ -194,7 +194,7 @@ func TestChatHeadersCarryProtocolFields(t *testing.T) {
 	assert.Contains(t, headers.Get("User-Agent"), "WorkBuddy/"+ClientVersion)
 	assert.Contains(t, headers.Get("User-Agent"), "CLI/"+CliVersion)
 	assert.Equal(t, "dev-1", headers.Get("X-Device-Token"))
-	assert.Equal(t, "203.0.113.7", headers.Get("X-Forwarded-For"))
+	assert.Empty(t, headers.Get("X-Forwarded-For"), "the client address stays with the relay")
 	assert.Equal(t, "conv-9", headers.Get("X-Conversation-ID"))
 	assert.Equal(t, requestID, headers.Get("X-Conversation-Request-ID"))
 	assert.Len(t, headers.Get("X-Conversation-Message-ID"), 32)

@@ -86,7 +86,6 @@ func TestChatMetaPrefersClientSession(t *testing.T) {
 	meta := chatMeta(context, info)
 	assert.Equal(t, "sess-42", meta.ConversationID)
 	assert.Equal(t, "req-1", meta.ConversationRequestID)
-	assert.Equal(t, "203.0.113.9", meta.ClientIP)
 
 	anonymous := testContext(t, nil)
 	meta = chatMeta(anonymous, info)

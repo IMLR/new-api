@@ -193,25 +193,11 @@ func chatMeta(c *gin.Context, info *relaycommon.RelayInfo) workbuddyapi.ChatMeta
 				break
 			}
 		}
-		meta.ClientIP = clientIP(c)
 	}
 	if meta.ConversationID == "" && info != nil {
 		meta.ConversationID = fmt.Sprintf("workbuddy-%d-%d-%d", info.ChannelId, info.UserId, info.TokenId)
 	}
 	return meta
-}
-
-func clientIP(c *gin.Context) string {
-	if c == nil {
-		return ""
-	}
-	if forwarded := c.Request.Header.Get("X-Forwarded-For"); forwarded != "" {
-		if index := strings.Index(forwarded, ","); index >= 0 {
-			return strings.TrimSpace(forwarded[:index])
-		}
-		return strings.TrimSpace(forwarded)
-	}
-	return strings.TrimSpace(c.ClientIP())
 }
 
 // upstreamFrameError is an error delivered inside a started event stream.
