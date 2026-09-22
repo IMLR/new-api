@@ -1,6 +1,7 @@
 package workbuddy
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -629,4 +631,25 @@ func TestNormalizeStreamReportsDroppedCallsEvenAfterDone(t *testing.T) {
 	out, err := readAll(NormalizeStream(strings.NewReader(source)))
 	require.NoError(t, err)
 	assert.Contains(t, out, "data: [DONE]")
+}
+
+func TestNormalizeStreamReportsToolCallsBeforeDone(t *testing.T) {
+	// The relay is not asked for more data once [DONE] has been read, so the
+	// diagnostic line has to be written while the marker is handled.
+	source := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-11\",\"type\":\"function\",\"function\":{\"name\":\"exec_command\",\"arguments\":\"{}\"}}]},\"finish_reason\":\"tool_calls\"}]}",
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	var logged bytes.Buffer
+	previous := gin.DefaultErrorWriter
+	gin.DefaultErrorWriter = &logged
+	defer func() { gin.DefaultErrorWriter = previous }()
+
+	out, err := readAll(NormalizeStream(strings.NewReader(source)))
+	require.NoError(t, err)
+	assert.Contains(t, out, "\"name\":\"exec_command\"")
+	assert.Contains(t, logged.String(), "workbuddy relay stream: answers=1 forwarded=1")
+	assert.Contains(t, logged.String(), "exec_command")
 }

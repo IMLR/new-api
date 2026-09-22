@@ -46,6 +46,8 @@ type normalizeReader struct {
 	// answers counts the frames that carried an answer (text or a tool call)
 	// and lastPayload keeps the most recent raw frame for diagnosis.
 	answers int
+	// reported guards the single diagnostic line per stream.
+	reported bool
 	// forwarded counts the frames the client really receives with usable
 	// content: text, or a tool call whose function name is known. A stream
 	// whose raw frames carried tool calls but forwarded none leaves a strict
@@ -94,6 +96,7 @@ func (r *normalizeReader) fill() {
 	}
 	if payload == "[DONE]" {
 		r.done = true
+		r.reportStream()
 		r.buffer.WriteString("data: [DONE]\n\n")
 		return
 	}
@@ -111,11 +114,7 @@ func (r *normalizeReader) fill() {
 // answer is reported as a failure: a silent end makes strict clients show a
 // generic disconnect message, while an error frame names the real cause.
 func (r *normalizeReader) fillTail() {
-	if len(r.toolFrames) > 0 || len(r.toolCallPending) > 0 || (r.answers > 0 && r.forwarded == 0) {
-		common.SysError(fmt.Sprintf(
-			"workbuddy relay stream: answers=%d forwarded=%d calls=%s held=%s last=%s",
-			r.answers, r.forwarded, truncateFrame(strings.Join(r.toolFrames, " ")), truncateFrame(r.heldPayload()), truncateFrame(r.lastPayload)))
-	}
+	r.reportStream()
 	if !r.done {
 		if r.forwarded == 0 {
 			common.SysError(fmt.Sprintf("workbuddy upstream stream ended without an answer, last frame: %s", truncateFrame(r.lastPayload)))
@@ -140,6 +139,23 @@ func (r *normalizeReader) recordToolFrame(call map[string]any) {
 		return
 	}
 	r.toolFrames = append(r.toolFrames, string(raw))
+}
+
+// reportStream writes one line for every stream that carried tool calls or
+// dropped fragments. The line is emitted when the stream ends, either at the
+// upstream [DONE] marker or at end of body, because the reader is not asked for
+// more data after [DONE] and a tail-only report would never run.
+func (r *normalizeReader) reportStream() {
+	if r.reported {
+		return
+	}
+	r.reported = true
+	if len(r.toolFrames) == 0 && len(r.toolCallPending) == 0 && !(r.answers > 0 && r.forwarded == 0) {
+		return
+	}
+	common.SysError(fmt.Sprintf(
+		"workbuddy relay stream: answers=%d forwarded=%d calls=%s held=%s last=%s",
+		r.answers, r.forwarded, truncateFrame(strings.Join(r.toolFrames, " ")), truncateFrame(r.heldPayload()), truncateFrame(r.lastPayload)))
 }
 
 // heldPayload renders the tool call fragments that never received a name, so a
