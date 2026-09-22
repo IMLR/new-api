@@ -263,14 +263,9 @@
 | VendorManager | 供应商增删改查，图标与描述 |
 | MissingModelsPanel | 缺失元数据的模型列表与一键补建 |
 | PrefillGroupManager | 预填分组管理，供渠道与模型表单使用 |
-| RatioTable | 模型倍率表格，支持行内编辑与批量设置 |
-| RatioVisualEditor | 按阶梯批量设置倍率 |
-| TieredPricingEditor | 分层定价表达式编辑 |
-| ToolPriceTable | 工具调用价格 |
-| GroupRatioTable、GroupSpecialUsableEditor | 分组倍率与分组可用范围 |
-| UpstreamRatioSyncTable | 从上游同步倍率，对比后采纳 |
-| ConflictConfirmDialog | 同步冲突确认 |
-| ModelPricingPanel | 模型页面内嵌的价格面板，标签页：模型倍率、未设置模型、工具价格、上游同步 |
+| ModelPriceFields | 模型编辑器里的价格输入：计费方式（按量、按次）、输入价格、输出价格、缓存读取价格、缓存写入价格，单位统一为美元每百万 token |
+| ModelPriceColumn | 模型列表的价格列，显示输入与输出价格，没有配置时显示未设置 |
+| PricingRatioAdapter | 把界面上的美元价格换算成后端存储的倍率（输入价格除以 2，其余档位相对输入价格取比例），以及反向读取 |
 
 ### 5.3 API 密钥
 
@@ -361,7 +356,7 @@
 |---|---|---|
 | 数据看板 | 时间与粒度筛选、统计卡、趋势图、消耗分布、模型排行、性能概览、图表偏好 | `/api/data`、`/api/data/self`、`/api/perf-metrics/summary`、`/api/status` |
 | 渠道 | 渠道表或卡片、筛选、批量动作、渠道编辑器、各类诊断对话框 | `/api/channel`、`/api/channel/search`、`/api/channel/${id}`、`/api/channel/${id}/status`、`/api/channel/batch`、`/api/channel/copy/${id}`、`/api/channel/tag`、`/api/channel/models`、`/api/channel/disabled`、`/api/channel/ops`、`/api/channel/test`、`/api/channel/fetch_models`、`/api/channel/update_balance`、`/api/channel/multi_key/manage`、`/api/channel/fingerprint/${id}`、`/api/channel/codex/*`、`/api/channel/${id}/cline/quota`、`/api/channel/${id}/opencode-go/quota`、`/api/group/`、`/api/prefill_group` |
-| 模型 | 模型表、模型编辑器、供应商管理、缺失模型、预填分组、价格面板 | `/api/models/`、`/api/models/search`、`/api/models/missing`、`/api/models/sync_upstream`、`/api/vendors/`、`/api/option/`、`/api/ratio_sync/channels`、`/api/ratio_sync/fetch` |
+| 模型 | 模型表（含价格列）、模型编辑器（含价格输入）、供应商管理、缺失模型、预填分组 | `/api/models/`、`/api/models/search`、`/api/models/missing`、`/api/models/sync_upstream`、`/api/vendors/`、`/api/option/`（价格存在 ModelRatio、CompletionRatio、CacheRatio、CreateCacheRatio、ModelPrice 这些选项里） |
 | API 密钥 | 密钥表、密钥编辑器、批量复制、CC Switch 导入 | `/api/token/`、`/api/token/search`、`/api/token/batch`、`/api/token/batch/keys`、`/api/token/${id}/key`、`/api/group/` |
 | 使用日志 | 筛选栏、统计条、日志表或卡片、详情与各类预览弹窗 | `/api/log`、`/api/log/stat`、`/api/user/${userId}` |
 | 高级配置 | 全局模型行为、路由可靠性、渠道亲和性、保存动作条 | `/api/option/` |
@@ -454,6 +449,7 @@
 - 聊天集成：聊天预设跳转、Cherry Studio 与 AionUI 这类外部入口、在线聊天页面与游乐场。
 - 系统设置中的站点品牌、系统公告编辑、侧边栏模块、身份验证提供商配置、敏感词、令牌限制、Worker 代理、性能页面、限速设置、SMTP 邮件、生图与任务日志。
 - 概览页的公告、常见问题、接口信息、在线状态面板。
+- 模型定价面板：倍率表格、按阶梯批量设置倍率、分层定价表达式、工具调用价格、分组倍率、上游倍率同步。价格只在模型编辑器里按美元填写。
 
 ## 十三、需要单独确认的边界项
 

@@ -39,10 +39,15 @@ import {
   getNameRuleConfig,
   getQuotaTypeConfig,
 } from '../constants'
-import { parseModelTags, formatEndpointsDisplay } from '../lib'
+import {
+  parseModelTags,
+  formatEndpointsDisplay,
+  type ModelPriceIndex,
+} from '../lib'
 import type { Model, Vendor } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 import { DescriptionCell } from './description-cell'
+import { ModelPriceCell } from './model-price-cell'
 
 function getCompactModelIcon(iconKey: string) {
   const baseIconKey = iconKey.split('.')[0]
@@ -53,7 +58,10 @@ function getCompactModelIcon(iconKey: string) {
 /**
  * Generate models columns configuration
  */
-export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
+export function useModelsColumns(
+  vendors: Vendor[] = [],
+  priceIndex?: ModelPriceIndex
+): ColumnDef<Model>[] {
   const { t } = useTranslation()
 
   // Get translated configs
@@ -231,6 +239,19 @@ export function useModelsColumns(vendors: Vendor[] = []): ColumnDef<Model>[] {
         return false
       },
       size: 110,
+      minSize: 110,
+      enableSorting: false,
+    },
+
+    // Price column, read back from the system pricing settings
+    {
+      id: 'price',
+      header: t('Price'),
+      meta: { mobileTitle: false },
+      cell: ({ row }) => (
+        <ModelPriceCell info={priceIndex?.get(row.original.model_name)} />
+      ),
+      size: 140,
       minSize: 110,
       enableSorting: false,
     },

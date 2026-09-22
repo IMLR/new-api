@@ -17,15 +17,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { getRouteApi } from '@tanstack/react-router'
-import { Plus } from 'lucide-react'
-
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Button } from '@/components/ui/button'
 import { SectionPageLayout } from '@/components/layout'
 
-import { ModelPricingPanel } from './components/model-pricing-panel'
 import { ModelsDialogs } from './components/models-dialogs'
 import { ModelsPrimaryButtons } from './components/models-primary-buttons'
 import { ModelsProvider } from './components/models-provider'
@@ -45,7 +40,6 @@ const SECTION_META: Record<ModelsSectionId, { titleKey: string }> = {
 
 function ModelsContent() {
   const { t } = useTranslation()
-  const [pricingOpen, setPricingOpen] = useState(false)
   const params = route.useParams()
   const activeSection = (params.section ??
     MODELS_DEFAULT_SECTION) as ModelsSectionId
@@ -57,23 +51,10 @@ function ModelsContent() {
       <SectionPageLayout fixedContent>
         <SectionPageLayout.Title>{t(meta.titleKey)}</SectionPageLayout.Title>
         <SectionPageLayout.Actions>
-          <Button
-            variant='outline'
-            size='sm'
-            onClick={() => setPricingOpen((open) => !open)}
-          >
-            <Plus data-icon='inline-start' />
-            {t('Model Pricing')}
-          </Button>
           <ModelsPrimaryButtons />
         </SectionPageLayout.Actions>
         <SectionPageLayout.Content>
-          <div className='flex h-full min-h-0 flex-col gap-4'>
-            {pricingOpen && <ModelPricingPanel />}
-            <div className='min-h-0 flex-1'>
-              <ModelsTable />
-            </div>
-          </div>
+          <ModelsTable />
         </SectionPageLayout.Content>
       </SectionPageLayout>
 

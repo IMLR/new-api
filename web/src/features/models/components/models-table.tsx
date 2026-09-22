@@ -31,10 +31,11 @@ import {
   getModelStatusOptions,
   getSyncStatusOptions,
 } from '../constants'
-import { modelsQueryKeys, vendorsQueryKeys } from '../lib'
+import { modelsQueryKeys, vendorsQueryKeys, buildModelPriceIndex } from '../lib'
 import { DataTableBulkActions } from './data-table-bulk-actions'
 import { useModelsColumns } from './models-columns'
 import { useModels } from './models-provider'
+import { useSystemOptions } from '@/features/system-settings/hooks/use-system-options'
 
 const route = getRouteApi('/_authenticated/models/$section')
 
@@ -81,6 +82,9 @@ export function ModelsTable() {
     queryKey: vendorsQueryKeys.list(),
     queryFn: () => getVendors({ page_size: 1000 }),
   })
+
+  // Fetch pricing settings so the price column can show configured prices
+  const { data: systemOptionsData } = useSystemOptions()
 
   const vendors = useMemo(
     () => vendorsData?.data?.items || [],
@@ -151,8 +155,13 @@ export function ModelsTable() {
   const totalCount = data?.data?.total || 0
   const vendorCounts = data?.data?.vendor_counts
 
+  const priceIndex = useMemo(
+    () => buildModelPriceIndex(systemOptionsData?.data),
+    [systemOptionsData]
+  )
+
   // Columns configuration
-  const columns = useModelsColumns(vendors)
+  const columns = useModelsColumns(vendors, priceIndex)
 
   // React Table instance
   const { table } = useDataTable({
