@@ -16,8 +16,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { Loader2, RefreshCw, Timer } from 'lucide-react'
+import {
+  CheckCircle2,
+  CircleDashed,
+  Loader2,
+  RefreshCw,
+  Timer,
+  XCircle,
+} from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { toast } from 'sonner'
 
 import { Dialog } from '@/components/dialog'
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
@@ -30,11 +39,16 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
+import { Switch } from '@/components/ui/switch'
 import dayjs from '@/lib/dayjs'
 import { formatDateTimeStr } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
-import type { WorkBuddyQuotaResponse } from '../../api'
+import {
+  setWorkBuddyTask,
+  type WorkBuddyQuotaResponse,
+  type WorkBuddyTask,
+} from '../../api'
 
 export type WorkBuddyQuotaDialogProps = {
   open: boolean
@@ -74,6 +88,35 @@ function usedPercent(used: number, size: number): number {
   return Math.min(100, Math.max(0, (used / size) * 100))
 }
 
+function TaskStatusIcon(props: { status: WorkBuddyTask['status'] }) {
+  switch (props.status) {
+    case 'done':
+      return <CheckCircle2 className='h-4 w-4 text-emerald-500' />
+    case 'failed':
+      return <XCircle className='h-4 w-4 text-red-500' />
+    case 'skipped':
+      return <CircleDashed className='h-4 w-4 text-amber-500' />
+    default:
+      return <CircleDashed className='text-muted-foreground h-4 w-4' />
+  }
+}
+
+function taskStatusLabel(
+  status: WorkBuddyTask['status'],
+  t: (key: string) => string
+): string {
+  switch (status) {
+    case 'done':
+      return t('Done')
+    case 'failed':
+      return t('Failed')
+    case 'skipped':
+      return t('Skipped')
+    default:
+      return t('Not started')
+  }
+}
+
 function InfoRow(props: { label: string; value: string; mono?: boolean }) {
   return (
     <div className='flex items-baseline justify-between gap-4 text-sm'>
@@ -102,6 +145,7 @@ export function WorkBuddyQuotaDialog({
   isRefreshing,
 }: WorkBuddyQuotaDialogProps) {
   const { t } = useTranslation()
+  const [busyTask, setBusyTask] = useState('')
 
   const data = response?.data ?? null
   const errorMessage =
@@ -109,6 +153,7 @@ export function WorkBuddyQuotaDialog({
       ? response.message?.trim() || t('Failed to fetch usage')
       : ''
   const packages = data?.packages ?? []
+  const tasks = data?.tasks ?? []
   const remain = Number(data?.remain ?? 0)
   const used = Number(data?.used ?? 0)
   const size = Number(data?.size ?? 0)
@@ -205,6 +250,91 @@ export function WorkBuddyQuotaDialog({
               </span>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className='text-sm'>{t('Account tasks')}</CardTitle>
+          <CardDescription>
+            {t(
+              'Tasks that run on the account. Turn one off if it keeps failing.'
+            )}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className='space-y-2'>
+          {tasks.length === 0 ? (
+            <div className='text-muted-foreground text-sm'>
+              {t('No tasks reported.')}
+            </div>
+          ) : (
+            tasks.map((task) => (
+              <div
+                key={task.id}
+                className='flex items-start justify-between gap-3 rounded-lg border p-3'
+              >
+                <div className='min-w-0 space-y-1'>
+                  <div className='flex items-center gap-2'>
+                    <TaskStatusIcon status={task.status} />
+                    <span className='text-sm font-medium break-all'>
+                      {task.title}
+                    </span>
+                    <span className='text-muted-foreground text-xs'>
+                      {taskStatusLabel(task.status, t)}
+                    </span>
+                  </div>
+                  {task.description ? (
+                    <div className='text-muted-foreground text-xs'>
+                      {task.description}
+                    </div>
+                  ) : null}
+                  {task.message ? (
+                    <div className='text-muted-foreground text-xs break-all'>
+                      {task.message}
+                    </div>
+                  ) : null}
+                  {task.hours?.length ? (
+                    <div className='text-muted-foreground text-xs'>
+                      {t('Runs at')}{' '}
+                      {task.hours
+                        .map((hour) => `${String(hour).padStart(2, '0')}:00`)
+                        .join(', ')}
+                    </div>
+                  ) : null}
+                </div>
+                <Switch
+                  checked={task.enabled}
+                  disabled={busyTask === task.id || !channelId}
+                  onCheckedChange={async (checked) => {
+                    if (!channelId) return
+                    setBusyTask(task.id)
+                    try {
+                      const res = await setWorkBuddyTask(
+                        channelId,
+                        task.id,
+                        checked
+                      )
+                      if (!res.success) {
+                        throw new Error(
+                          res.message || t('Failed to update task')
+                        )
+                      }
+                      toast.success(t('Task updated'))
+                      await onRefresh?.()
+                    } catch (error) {
+                      toast.error(
+                        error instanceof Error
+                          ? error.message
+                          : t('Failed to update task')
+                      )
+                    } finally {
+                      setBusyTask('')
+                    }
+                  }}
+                />
+              </div>
+            ))
+          )}
         </CardContent>
       </Card>
 

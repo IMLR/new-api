@@ -192,7 +192,19 @@ export type WorkBuddyQuotaData = {
   used?: number
   size?: number
   packages?: WorkBuddyQuotaPackage[]
+  tasks?: WorkBuddyTask[]
   checked_at?: string
+}
+
+export type WorkBuddyTask = {
+  id: string
+  title: string
+  description?: string
+  hours?: number[]
+  enabled: boolean
+  status: 'pending' | 'done' | 'skipped' | 'failed'
+  message?: string
+  at?: number
 }
 
 export type WorkBuddyQuotaResponse = {
@@ -572,6 +584,23 @@ export async function getWorkBuddyQuota(
   const res = await api.get(
     `/api/channel/${channelId}/workbuddy/quota`,
     channelActionConfig({ disableDuplicate: true })
+  )
+  return res.data
+}
+
+export async function setWorkBuddyTask(
+  channelId: number,
+  taskId: string,
+  enabled: boolean
+): Promise<{
+  success: boolean
+  message?: string
+  data?: { tasks: WorkBuddyTask[] }
+}> {
+  const res = await api.post(
+    `/api/channel/${channelId}/workbuddy/tasks/${taskId}`,
+    { enabled },
+    channelActionConfig()
   )
   return res.data
 }
