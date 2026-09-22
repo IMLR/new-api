@@ -201,6 +201,32 @@ export type WorkBuddyQuotaResponse = {
   data?: WorkBuddyQuotaData
 }
 
+export type WorkBuddyOAuthStartResponse = {
+  success: boolean
+  message?: string
+  data?: {
+    flow_id: string
+    authorize_url: string
+    expires_at: string
+  }
+}
+
+export type WorkBuddyOAuthCompleteResponse = {
+  success: boolean
+  message?: string
+  data?: {
+    status: 'pending' | 'ready'
+    credential?: string
+    realm?: string
+    domain?: string
+    account?: {
+      uid?: string
+      enterpriseId?: string
+      nickname?: string
+    }
+  }
+}
+
 // ============================================================================
 // Base Channel CRUD Operations
 // ============================================================================
@@ -546,6 +572,29 @@ export async function getWorkBuddyQuota(
   const res = await api.get(
     `/api/channel/${channelId}/workbuddy/quota`,
     channelActionConfig({ disableDuplicate: true })
+  )
+  return res.data
+}
+
+export async function startWorkBuddyOAuth(
+  realm: string,
+  proxy = ''
+): Promise<WorkBuddyOAuthStartResponse> {
+  const res = await api.post(
+    '/api/channel/workbuddy/oauth/start',
+    { realm, proxy },
+    channelActionConfig()
+  )
+  return res.data
+}
+
+export async function completeWorkBuddyOAuth(
+  flowId: string
+): Promise<WorkBuddyOAuthCompleteResponse> {
+  const res = await api.post(
+    '/api/channel/workbuddy/oauth/complete',
+    { flow_id: flowId },
+    channelActionConfig()
   )
   return res.data
 }

@@ -53,3 +53,9 @@ func TestFingerprintRouteRequiresChannelOperatePermission(t *testing.T) {
 	assertChannelRoutePermission(t, http.MethodGet, "/fingerprint/:id", authz.ChannelOperate, controller.GetChannelFingerprint)
 	assertChannelRoutePermission(t, http.MethodPost, "/fingerprint/:id", authz.ChannelOperate, controller.TestChannelFingerprint)
 }
+
+func TestWorkBuddySignInRoutesRequireSensitiveWritePermission(t *testing.T) {
+	assertChannelRoutePermission(t, http.MethodPost, "/workbuddy/oauth/start", authz.ChannelSensitiveWrite, controller.StartWorkBuddyOAuth)
+	assertChannelRoutePermission(t, http.MethodPost, "/workbuddy/oauth/complete", authz.ChannelSensitiveWrite, controller.CompleteWorkBuddyOAuth)
+	assertChannelRoutePermission(t, http.MethodGet, "/:id/workbuddy/quota", authz.ChannelRead, controller.GetWorkBuddyChannelQuota)
+}

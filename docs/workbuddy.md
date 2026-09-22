@@ -13,7 +13,25 @@
 
 `refreshToken` 必填，否则保存时直接报错。`realm` 只接受 `cn` 与 `global`；不填时按 `domain` 判断（`workbuddy.ai` 及其子域为国际版），再不行按国内版处理。
 
-登录使用上游的 OAuth 设备授权流程（workbuddy2api 的 `login.sh`），本仓库不做登录，只接收登录结果。
+## 渠道页面登录
+
+新建或编辑 WorkBuddy 渠道时，密钥输入框上方有「登录 WorkBuddy」按钮，走的是上游的 OAuth 设备授权流程：
+
+1. 选择部署（中国 / 国际）。
+2. 点击后中转向上游申请一个授权会话，弹出登录链接（同页可复制或再次打开）。
+3. 在浏览器完成 CodeBuddy 登录，回到对话框点击「我已登录完成」。
+4. 中转轮询上游换取令牌与账号信息，成功后把规范化的凭证写入密钥输入框，保存渠道即可。
+
+登录链接默认 10 分钟有效；未完成登录时对话框会提示稍后再次确认，流程不会因为一次确认而失效。
+
+接口：
+
+- `POST /api/channel/workbuddy/oauth/start`，请求体 `{"realm":"cn|global","proxy":""}`，返回 `flow_id`、`authorize_url` 与过期时间。
+- `POST /api/channel/workbuddy/oauth/complete`，请求体 `{"flow_id":"..."}`，返回 `status` 为 `pending` 或 `ready`；`ready` 时附带凭证 JSON 与账号信息。
+
+两个接口都需要渠道敏感写入权限。授权会话沿用与 Codex 登录相同的存放方式：有 Redis 时存 Redis，否则存进程内存。
+
+也可以在别处完成登录后手工粘贴凭证：参考实现的 `login.sh`（`./login.sh --realm=global` 选国际版）会把同样的字段写到 `auths/workbuddy-<uid>.json`，把该文件内容整段粘贴进密钥输入框即可。
 
 ## 令牌续期
 

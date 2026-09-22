@@ -185,6 +185,7 @@ import {
 } from '../dialogs/missing-models-confirmation-dialog'
 import { ParamOverrideEditorDialog } from '../dialogs/param-override-editor-dialog'
 import { StatusCodeRiskDialog } from '../dialogs/status-code-risk-dialog'
+import { WorkBuddyOAuthDialog } from '../dialogs/workbuddy-oauth-dialog'
 import { ModelMappingEditor } from '../model-mapping-editor'
 import {
   ChannelAdvancedSection,
@@ -621,6 +622,8 @@ export function ChannelMutateDrawer({
   const canRevealChannelKey = currentUser?.role === ROLE.SUPER_ADMIN
   const [fetchModelsDialogOpen, setFetchModelsDialogOpen] = useState(false)
   const [codexOAuthDialogOpen, setCodexOAuthDialogOpen] = useState(false)
+  const [workBuddyOAuthDialogOpen, setWorkBuddyOAuthDialogOpen] =
+    useState(false)
   const [channelKey, setChannelKey] = useState<string | null>(null)
   const [isChannelKeyLoading, setIsChannelKeyLoading] = useState(false)
   const [isCodexCredentialRefreshing, setIsCodexCredentialRefreshing] =
@@ -4099,6 +4102,34 @@ export function ChannelMutateDrawer({
                             className='space-y-4 disabled:opacity-60'
                           >
                             <div className='divide-border space-y-0 divide-y border-y'>
+                              {currentType === 62 && (
+                                <div className='border-border/60 flex flex-col gap-3 border-y py-4'>
+                                  <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
+                                    <div className='text-muted-foreground text-xs'>
+                                      {t(
+                                        'Sign in with the CodeBuddy account to fill the credential.'
+                                      )}
+                                    </div>
+                                    <div className='flex flex-wrap items-center gap-2'>
+                                      <Button
+                                        type='button'
+                                        size='sm'
+                                        onClick={() =>
+                                          setWorkBuddyOAuthDialogOpen(true)
+                                        }
+                                        disabled={sensitiveLocked}
+                                        className='bg-cyan-500 text-slate-950 hover:bg-cyan-400'
+                                      >
+                                        <Link2 className='mr-2 h-4 w-4' />
+                                        {isEditing
+                                          ? t('Reauthorize WorkBuddy')
+                                          : t('Sign in with WorkBuddy')}
+                                      </Button>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
                               {currentType === 1 && (
                                 <FormField
                                   control={form.control}
@@ -4759,6 +4790,18 @@ export function ChannelMutateDrawer({
               queryKey: channelsQueryKeys.detail(channelId),
             })
           }
+        }}
+      />
+
+      <WorkBuddyOAuthDialog
+        open={workBuddyOAuthDialogOpen}
+        onOpenChange={setWorkBuddyOAuthDialogOpen}
+        proxy={currentProxy}
+        onAuthorized={(credential) => {
+          form.setValue('key', credential, {
+            shouldDirty: true,
+            shouldValidate: true,
+          })
         }}
       />
 
