@@ -299,6 +299,75 @@ func TestNormalizeStreamKeepsLegacyFunctionCall(t *testing.T) {
 	assert.Contains(t, out, "legacy")
 }
 
+func TestNormalizeStreamHoldsToolCallUntilNameArrives(t *testing.T) {
+	// The upstream sometimes sends the identity first and the function name in a
+	// later fragment. A client that registers the call on the first fragment
+	// would keep an empty name, so the relay holds the fragments back.
+	source := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-7\",\"type\":\"function\",\"function\":{\"name\":\"\",\"arguments\":\"\"}}]},\"finish_reason\":null}]}",
+		"",
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"arguments\":\"{\\\"path\\\":\"}}]},\"finish_reason\":null}]}",
+		"",
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"function\":{\"name\":\"read_file\",\"arguments\":\"\\\"a.txt\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}",
+		"",
+	}, "\n")
+	out, err := readAll(NormalizeStream(strings.NewReader(source)))
+	require.NoError(t, err)
+
+	var fragments []map[string]any
+	for _, line := range strings.Split(out, "\n") {
+		if !strings.HasPrefix(line, "data: ") || strings.Contains(line, "[DONE]") {
+			continue
+		}
+		var frame map[string]any
+		require.NoError(t, json.Unmarshal([]byte(strings.TrimPrefix(line, "data: ")), &frame))
+		choices, ok := frame["choices"].([]any)
+		if !ok || len(choices) == 0 {
+			continue
+		}
+		delta, ok := choices[0].(map[string]any)["delta"].(map[string]any)
+		if !ok {
+			continue
+		}
+		for _, rawCall := range toAnySlice(delta["tool_calls"]) {
+			call, ok := rawCall.(map[string]any)
+			if !ok {
+				continue
+			}
+			fragments = append(fragments, call)
+		}
+	}
+	require.Len(t, fragments, 2, "the held fragments arrive with the name, the rest follows")
+	released := fragments[0]
+	assert.Equal(t, "call-7", released["id"], "the held identity is released with the name")
+	releasedFunction := released["function"].(map[string]any)
+	assert.Equal(t, "read_file", releasedFunction["name"])
+	assert.Equal(t, "{\"path\":", releasedFunction["arguments"])
+	rest := fragments[1]["function"].(map[string]any)
+	assert.NotContains(t, rest, "name", "the name is sent once")
+	assert.Equal(t, "\"a.txt\"}", rest["arguments"])
+	assert.Equal(t, "{\"path\":\"a.txt\"}", releasedFunction["arguments"].(string)+rest["arguments"].(string))
+	assert.NotContains(t, out, `"name":""`, "an empty name never reaches the client")
+}
+
+func TestNormalizeStreamDropsToolCallWithoutName(t *testing.T) {
+	source := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-8\",\"type\":\"function\",\"function\":{\"arguments\":\"{}\"}}]},\"finish_reason\":null}]}",
+		"",
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}",
+		"",
+	}, "\n")
+	out, err := readAll(NormalizeStream(strings.NewReader(source)))
+	require.NoError(t, err)
+	assert.NotContains(t, out, "call-8", "an unusable call is not forwarded")
+	assert.NotContains(t, out, `"name":""`)
+}
+
+func toAnySlice(value any) []any {
+	slice, _ := value.([]any)
+	return slice
+}
+
 func TestAggregateStreamBuildsChatCompletion(t *testing.T) {
 	source := strings.Join([]string{
 		"data: {\"id\":\"chunk-1\",\"model\":\"glm-5.3\",\"created\":1790000000,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hel\"},\"finish_reason\":null}]}",
@@ -340,6 +409,21 @@ func TestAggregateStreamRejectsEmptyAndErrorStreams(t *testing.T) {
 	_, err = AggregateStream(strings.NewReader("data: {\"error\":{\"code\":6004,\"message\":\"limited\"}}\n\n"))
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "6004")
+}
+
+func TestAggregateStreamDropsToolCallWithoutName(t *testing.T) {
+	source := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-9\",\"type\":\"function\",\"function\":{\"arguments\":\"{}\"}}]},\"finish_reason\":null}]}",
+		"",
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+		"",
+	}, "\n")
+	raw, err := AggregateStream(strings.NewReader(source))
+	require.NoError(t, err)
+	var answer map[string]any
+	require.NoError(t, json.Unmarshal(raw, &answer))
+	message := answer["choices"].([]any)[0].(map[string]any)["message"].(map[string]any)
+	assert.NotContains(t, message, "tool_calls")
 }
 
 func TestModelsMergesBothCatalogs(t *testing.T) {

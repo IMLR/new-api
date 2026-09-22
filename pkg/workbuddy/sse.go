@@ -26,8 +26,14 @@ type normalizeReader struct {
 	buffer        bytes.Buffer
 	seenID        string
 	toolCallNames map[int]bool
-	done          bool
-	err           error
+	// pendingToolCalls holds tool call fragments that arrived before the
+	// function name. Strict clients register the call when its first fragment
+	// arrives, so a name that shows up later must still be delivered with that
+	// first fragment.
+	toolCallPending  map[int][]map[string]any
+	toolCallEnvelope map[int]map[string]any
+	done             bool
+	err              error
 }
 
 func (r *normalizeReader) Read(p []byte) (int, error) {
@@ -70,10 +76,11 @@ func (r *normalizeReader) fill() {
 		r.buffer.WriteString("data: [DONE]\n\n")
 		return
 	}
-	rewritten := r.rewrite(payload)
-	r.buffer.WriteString("data: ")
-	r.buffer.WriteString(rewritten)
-	r.buffer.WriteString("\n\n")
+	for _, rewritten := range r.rewrite(payload) {
+		r.buffer.WriteString("data: ")
+		r.buffer.WriteString(rewritten)
+		r.buffer.WriteString("\n\n")
+	}
 	if err == io.EOF {
 		r.fillTail()
 	}
@@ -88,15 +95,15 @@ func (r *normalizeReader) fillTail() {
 	r.err = io.EOF
 }
 
-func (r *normalizeReader) rewrite(payload string) string {
+func (r *normalizeReader) rewrite(payload string) []string {
 	var frame map[string]any
 	if err := json.Unmarshal([]byte(payload), &frame); err != nil {
-		return payload
+		return []string{payload}
 	}
 	if _, isError := frame["error"]; isError {
 		// Error frames keep their original fields so the client sees the
 		// upstream code and message.
-		return payload
+		return []string{payload}
 	}
 	if r.seenID == "" {
 		if id, ok := frame["id"].(string); ok && id != "" {
@@ -108,12 +115,207 @@ func (r *normalizeReader) rewrite(payload string) string {
 	if r.toolCallNames == nil {
 		r.toolCallNames = map[int]bool{}
 	}
-	stripToolCallNames(frame, r.toolCallNames)
+	released := r.splitToolCalls(frame)
+	rewritten := make([]string, 0, 2)
+	if released != nil {
+		if out, err := json.Marshal(normalizeFrame(released)); err == nil {
+			rewritten = append(rewritten, string(out))
+		}
+	}
 	out, err := json.Marshal(normalizeFrame(frame))
 	if err != nil {
-		return payload
+		return []string{payload}
 	}
-	return string(out)
+	return append(rewritten, string(out))
+}
+
+// splitToolCalls normalizes the tool call fragments of one frame and returns an
+// extra frame when held fragments can finally be sent.
+//
+// Upstream sends a tool call as fragments: the first one carries the identity
+// and usually the function name, the ones after it carry argument pieces. Two
+// upstream habits break strict clients:
+//
+//   - the first fragment may arrive without a name, with the name following in
+//     a later fragment. A client that registers the call when it sees the first
+//     fragment would keep an empty name, which strict clients report as a call
+//     to an undeclared tool. Such fragments are therefore held back until the
+//     name arrives, and then sent together with it.
+//   - an empty name key must never be forwarded, because clients that treat an
+//     empty string as a name also report an undeclared tool.
+//
+// A name that never arrives is dropped together with its held fragments: an
+// argument-only fragment is unusable, and sending it makes a strict client fail
+// the whole turn.
+func (r *normalizeReader) splitToolCalls(frame map[string]any) map[string]any {
+	choices, ok := frame["choices"].([]any)
+	if !ok {
+		return nil
+	}
+	var released map[string]any
+	for _, rawChoice := range choices {
+		choice, ok := rawChoice.(map[string]any)
+		if !ok {
+			continue
+		}
+		delta, ok := choice["delta"].(map[string]any)
+		if !ok {
+			continue
+		}
+		calls, ok := delta["tool_calls"].([]any)
+		if !ok || len(calls) == 0 {
+			continue
+		}
+		kept := make([]any, 0, len(calls))
+		for _, rawCall := range calls {
+			call, ok := rawCall.(map[string]any)
+			if !ok {
+				kept = append(kept, rawCall)
+				continue
+			}
+			index := 0
+			if value, ok := call["index"].(float64); ok {
+				index = int(value)
+			}
+			function, _ := call["function"].(map[string]any)
+			name := ""
+			if function != nil {
+				name, _ = function["name"].(string)
+				name = strings.TrimSpace(name)
+			}
+			switch {
+			case name == "":
+				if function != nil {
+					delete(function, "name")
+				}
+				if !r.toolCallNames[index] {
+					r.holdToolCall(frame, index, call)
+					continue
+				}
+				kept = append(kept, call)
+			case r.toolCallNames[index]:
+				delete(function, "name")
+				kept = append(kept, call)
+			default:
+				r.toolCallNames[index] = true
+				held := r.releaseToolCall(index)
+				if len(held) == 0 {
+					kept = append(kept, call)
+					continue
+				}
+				// Only the name travels with the held fragments; the arguments of
+				// this fragment stay on it, so they are not sent twice.
+				merged := mergeToolCallFragments(append(held, map[string]any{
+					"index":    index,
+					"type":     "function",
+					"function": map[string]any{"name": name},
+				}))
+				if candidate := frameWithToolCalls(frame, merged); candidate != nil {
+					released = candidate
+				}
+				delete(function, "name")
+				kept = append(kept, call)
+			}
+		}
+		if len(kept) == 0 {
+			delete(delta, "tool_calls")
+			continue
+		}
+		delta["tool_calls"] = kept
+	}
+	return released
+}
+
+// holdToolCall keeps a nameless fragment together with the frame envelope, so
+// it can be sent once the name is known.
+func (r *normalizeReader) holdToolCall(frame map[string]any, index int, call map[string]any) {
+	if r.toolCallPending == nil {
+		r.toolCallPending = map[int][]map[string]any{}
+		r.toolCallEnvelope = map[int]map[string]any{}
+	}
+	r.toolCallPending[index] = append(r.toolCallPending[index], cloneToolCall(call))
+	if _, ok := r.toolCallEnvelope[index]; !ok {
+		if envelope := frameEnvelope(frame); envelope != nil {
+			r.toolCallEnvelope[index] = envelope
+		}
+	}
+}
+
+// releaseToolCall returns the fragments held for one index and forgets them.
+func (r *normalizeReader) releaseToolCall(index int) []map[string]any {
+	held := r.toolCallPending[index]
+	delete(r.toolCallPending, index)
+	delete(r.toolCallEnvelope, index)
+	return held
+}
+
+// frameEnvelope copies a frame without its choices.
+func frameEnvelope(frame map[string]any) map[string]any {
+	envelope := map[string]any{}
+	for key, value := range frame {
+		if key == "choices" {
+			continue
+		}
+		envelope[key] = value
+	}
+	return envelope
+}
+
+// frameWithToolCalls rebuilds a frame from an envelope and one tool call.
+func frameWithToolCalls(frame map[string]any, call map[string]any) map[string]any {
+	rebuilt := frameEnvelope(frame)
+	rebuilt["choices"] = []any{map[string]any{
+		"index":         0,
+		"delta":         map[string]any{"tool_calls": []any{call}},
+		"finish_reason": nil,
+	}}
+	return rebuilt
+}
+
+// mergeToolCallFragments folds the held fragments and the fragment carrying the
+// name into one tool call.
+func mergeToolCallFragments(fragments []map[string]any) map[string]any {
+	merged := map[string]any{"type": "function", "function": map[string]any{}}
+	function := merged["function"].(map[string]any)
+	arguments := ""
+	for _, fragment := range fragments {
+		for key, value := range fragment {
+			if key == "function" {
+				continue
+			}
+			if _, exists := merged[key]; !exists {
+				merged[key] = value
+			}
+		}
+		inner, ok := fragment["function"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if name, ok := inner["name"].(string); ok && strings.TrimSpace(name) != "" {
+			function["name"] = strings.TrimSpace(name)
+		}
+		if chunk, ok := inner["arguments"].(string); ok {
+			arguments += chunk
+		}
+	}
+	if arguments != "" {
+		function["arguments"] = arguments
+	}
+	return merged
+}
+
+// cloneToolCall copies one fragment, so held data is not shared with the frame
+// that is written out afterwards.
+func cloneToolCall(call map[string]any) map[string]any {
+	raw, err := json.Marshal(call)
+	if err != nil {
+		return call
+	}
+	var clone map[string]any
+	if err := json.Unmarshal(raw, &clone); err != nil {
+		return call
+	}
+	return clone
 }
 
 // normalizeFrame rebuilds one frame with only the fields the OpenAI streaming
@@ -188,49 +390,6 @@ func normalizeFrame(frame map[string]any) map[string]any {
 		out["usage"] = nil
 	}
 	return out
-}
-
-// stripToolCallNames keeps the function name on the first fragment of a tool
-// call only, which is what the OpenAI stream shape prescribes. seen carries the
-// indexes already introduced earlier in the same stream.
-func stripToolCallNames(frame map[string]any, seen map[int]bool) {
-	choices, ok := frame["choices"].([]any)
-	if !ok {
-		return
-	}
-	for _, rawChoice := range choices {
-		choice, ok := rawChoice.(map[string]any)
-		if !ok {
-			continue
-		}
-		delta, ok := choice["delta"].(map[string]any)
-		if !ok {
-			continue
-		}
-		calls, ok := delta["tool_calls"].([]any)
-		if !ok {
-			continue
-		}
-		for _, rawCall := range calls {
-			call, ok := rawCall.(map[string]any)
-			if !ok {
-				continue
-			}
-			function, ok := call["function"].(map[string]any)
-			if !ok {
-				continue
-			}
-			index, ok := call["index"].(float64)
-			if !ok {
-				continue
-			}
-			if !seen[int(index)] {
-				seen[int(index)] = true
-				continue
-			}
-			delete(function, "name")
-		}
-	}
 }
 
 // AggregateStream folds a normalized stream into one non-streaming chat
@@ -329,9 +488,19 @@ func AggregateStream(src io.Reader) ([]byte, error) {
 	if len(toolOrder) > 0 {
 		calls := make([]any, 0, len(toolOrder))
 		for _, index := range toolOrder {
-			calls = append(calls, toolCalls[index])
+			call := toolCalls[index]
+			if function, ok := call["function"].(map[string]any); ok {
+				if name, _ := function["name"].(string); strings.TrimSpace(name) == "" {
+					// A call without a name cannot be executed and makes strict
+					// clients fail the whole turn.
+					continue
+				}
+			}
+			calls = append(calls, call)
 		}
-		message["tool_calls"] = calls
+		if len(calls) > 0 {
+			message["tool_calls"] = calls
+		}
 	}
 	if id == "" {
 		id = "chatcmpl-workbuddy"
