@@ -1122,6 +1122,8 @@
     "Copy selected models separated by commas (e.g. a,b)": "選択したモデルをカンマ区切りでコピー（例: a,b）",
     "Copy source field to target field": "ソースフィールドをターゲットフィールドにコピー",
     "Copy the key and paste it here": "キーをコピーしてここに貼り付けてください",
+    "Copy the link, sign in, then confirm here.": "リンクをコピーしてサインインし、ここで確認します。",
+    "Copy the link, sign in, then confirm here. Expires at {{time}}": "リンクをコピーしてサインインし、ここで確認します。有効期限 {{time}}",
     "Copy this prompt and send it to an LLM (e.g. ChatGPT / Claude) to help design your billing expression.": "このプロンプトをコピーしてLLM（ChatGPT / Claudeなど）に送り、課金式の設計を依頼してください。",
     "Copy to clipboard": "クリップボードにコピー",
     "Copy token": "トークンをコピー",

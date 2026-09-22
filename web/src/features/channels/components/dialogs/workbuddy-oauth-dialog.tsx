@@ -16,14 +16,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import {
-  Check,
-  Copy,
-  ExternalLink,
-  Link2,
-  Loader2,
-  RefreshCw,
-} from 'lucide-react'
+import { Check, Copy, Link2, Loader2, RefreshCw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -112,7 +105,6 @@ export function WorkBuddyOAuthDialog({
       setFlowId(response.data.flow_id)
       setAuthorizeUrl(response.data.authorize_url)
       setExpiresAt(response.data.expires_at)
-      window.open(response.data.authorize_url, '_blank', 'noopener,noreferrer')
     } catch (error) {
       toast.error(
         error instanceof Error
@@ -244,23 +236,16 @@ export function WorkBuddyOAuthDialog({
                     <Copy className='h-4 w-4' />
                   )}
                 </Button>
-                <Button
-                  type='button'
-                  variant='outline'
-                  size='icon'
-                  onClick={() =>
-                    window.open(authorizeUrl, '_blank', 'noopener,noreferrer')
-                  }
-                >
-                  <ExternalLink className='h-4 w-4' />
-                </Button>
               </div>
               <FieldDescription>
                 {expiresAt
-                  ? t('Link expires at {{time}}', {
-                      time: new Date(expiresAt).toLocaleTimeString(),
-                    })
-                  : t('Open the link, sign in, then confirm here.')}
+                  ? t(
+                      'Copy the link, sign in, then confirm here. Expires at {{time}}',
+                      {
+                        time: new Date(expiresAt).toLocaleTimeString(),
+                      }
+                    )
+                  : t('Copy the link, sign in, then confirm here.')}
               </FieldDescription>
             </Field>
 

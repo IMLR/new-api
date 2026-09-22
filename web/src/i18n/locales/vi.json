@@ -1122,6 +1122,8 @@
     "Copy selected models separated by commas (e.g. a,b)": "Sao chép các mô hình đã chọn, phân tách bằng dấu phẩy (ví dụ: a,b)",
     "Copy source field to target field": "Sao chép trường nguồn sang trường đích",
     "Copy the key and paste it here": "Sao chép khóa và dán vào đây",
+    "Copy the link, sign in, then confirm here.": "Sao chép liên kết, đăng nhập rồi xác nhận tại đây.",
+    "Copy the link, sign in, then confirm here. Expires at {{time}}": "Sao chép liên kết, đăng nhập rồi xác nhận tại đây. Hết hạn lúc {{time}}",
     "Copy this prompt and send it to an LLM (e.g. ChatGPT / Claude) to help design your billing expression.": "Sao chép prompt này và gửi cho LLM (ví dụ: ChatGPT / Claude) để được hỗ trợ thiết kế biểu thức tính phí.",
     "Copy to clipboard": "Sao chép vào bảng tạm",
     "Copy token": "Sao chép mã thông báo",

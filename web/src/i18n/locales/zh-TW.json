@@ -1122,6 +1122,8 @@
     "Copy selected models separated by commas (e.g. a,b)": "複製已選模型，使用英文逗號隔開（例如 a,b）",
     "Copy source field to target field": "把來源欄位複製到目標欄位",
     "Copy the key and paste it here": "複製金鑰並粘貼到這裡",
+    "Copy the link, sign in, then confirm here.": "複製連結完成登入，然後回到這裡確認。",
+    "Copy the link, sign in, then confirm here. Expires at {{time}}": "複製連結完成登入，然後回到這裡確認。有效至 {{time}}",
     "Copy this prompt and send it to an LLM (e.g. ChatGPT / Claude) to help design your billing expression.": "複製以下提示詞發送給 LLM（如 ChatGPT / Claude），讓它幫你設計收費表達式",
     "Copy to clipboard": "複製到剪貼簿",
     "Copy token": "複製令牌",

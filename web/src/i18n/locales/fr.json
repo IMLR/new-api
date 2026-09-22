@@ -1122,6 +1122,8 @@
     "Copy selected models separated by commas (e.g. a,b)": "Copier les modèles sélectionnés séparés par des virgules (par ex. a,b)",
     "Copy source field to target field": "Copier le champ source vers le champ cible",
     "Copy the key and paste it here": "Copiez la clé et collez-la ici",
+    "Copy the link, sign in, then confirm here.": "Copiez le lien, connectez-vous, puis confirmez ici.",
+    "Copy the link, sign in, then confirm here. Expires at {{time}}": "Copiez le lien, connectez-vous, puis confirmez ici. Expire à {{time}}",
     "Copy this prompt and send it to an LLM (e.g. ChatGPT / Claude) to help design your billing expression.": "Copiez ce prompt et envoyez-le à un LLM (ex. ChatGPT / Claude) pour vous aider à concevoir votre expression de facturation.",
     "Copy to clipboard": "Copier dans le presse-papiers",
     "Copy token": "Copier le Jeton",

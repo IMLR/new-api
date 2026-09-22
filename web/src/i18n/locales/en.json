@@ -1122,6 +1122,8 @@
     "Copy selected models separated by commas (e.g. a,b)": "Copy selected models separated by commas (e.g. a,b)",
     "Copy source field to target field": "Copy source field to target field",
     "Copy the key and paste it here": "Copy the key and paste it here",
+    "Copy the link, sign in, then confirm here.": "Copy the link, sign in, then confirm here.",
+    "Copy the link, sign in, then confirm here. Expires at {{time}}": "Copy the link, sign in, then confirm here. Expires at {{time}}",
     "Copy this prompt and send it to an LLM (e.g. ChatGPT / Claude) to help design your billing expression.": "Copy this prompt and send it to an LLM (e.g. ChatGPT / Claude) to help design your billing expression.",
     "Copy to clipboard": "Copy to clipboard",
     "Copy token": "Copy token",
