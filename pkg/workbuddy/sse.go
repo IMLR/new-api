@@ -40,7 +40,7 @@ type normalizeReader struct {
 	nextToolCallIndex int
 	// answers counts the frames that carried an answer (text or a tool call)
 	// and lastPayload keeps the most recent raw frame for diagnosis.
-	answers     int
+	answers int
 	// forwarded counts the frames the client really receives with usable
 	// content: text, or a tool call whose function name is known. A stream
 	// whose raw frames carried tool calls but forwarded none leaves a strict
