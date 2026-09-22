@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,6 +21,18 @@ type HTTPError struct {
 
 func (e *HTTPError) Error() string {
 	return fmt.Sprintf("workbuddy upstream returned %d: %s", e.Status, truncate(e.Body, 200))
+}
+
+// IsSessionExpired reports that the upstream rejected the stored credential
+// because the sign-in is gone: the refresh token no longer exists on the
+// account, so only a new sign-in recovers the channel.
+func IsSessionExpired(err error) bool {
+	var httpErr *HTTPError
+	if !errors.As(err, &httpErr) {
+		return false
+	}
+	body := strings.ToLower(httpErr.Body)
+	return strings.Contains(body, "12153") || strings.Contains(body, "invalid_grant")
 }
 
 func truncate(value string, limit int) string {

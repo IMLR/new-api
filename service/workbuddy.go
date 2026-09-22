@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -13,6 +14,34 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	workbuddyapi "github.com/QuantumNous/new-api/pkg/workbuddy"
 )
+
+// workBuddyBase resolves the upstream host for one channel. A base URL set by
+// the operator wins; the built-in default follows the account realm, because a
+// CN account talks to copilot.tencent.com while a global account talks to
+// www.workbuddy.ai, and on CN the billing host differs from the chat host.
+func workBuddyBase(ch *model.Channel, credential *workbuddyapi.Credential, billing bool) string {
+	if ch != nil {
+		if configured := strings.TrimSpace(ch.GetBaseURL()); configured != "" && configured != workbuddyapi.ChatBaseCN {
+			return configured
+		}
+	}
+	if credential == nil {
+		return workbuddyapi.ChatBaseCN
+	}
+	if billing {
+		return credential.BillingBase()
+	}
+	return credential.ChatBase()
+}
+
+// workBuddyCredentialError spells out the way out of a dead upstream session,
+// which the raw identity provider error does not mention.
+func workBuddyCredentialError(err error) error {
+	if workbuddyapi.IsSessionExpired(err) {
+		return fmt.Errorf("WorkBuddy sign-in has expired, sign in again from the channel credentials: %w", err)
+	}
+	return err
+}
 
 // ResolveWorkBuddyCredential re-reads the persisted credential under the refresh
 // lock and renews the token when it is about to expire. rejectedToken coalesces
@@ -34,9 +63,9 @@ func ResolveWorkBuddyCredential(ctx context.Context, id int, rejectedToken strin
 		}
 		refreshCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
-		refreshed, err := workbuddyapi.Refresh(refreshCtx, client, ch.GetBaseURL(), credential)
+		refreshed, err := workbuddyapi.Refresh(refreshCtx, client, workBuddyBase(ch, credential, false), credential)
 		if err != nil {
-			return "", err
+			return "", workBuddyCredentialError(err)
 		}
 		result = refreshed
 		encoded, err := common.Marshal(refreshed)
@@ -66,14 +95,14 @@ func FetchWorkBuddyChannelModels(ch *model.Channel) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	infos, err := workbuddyapi.Models(ctx, client, ch.GetBaseURL(), credential)
+	infos, err := workbuddyapi.Models(ctx, client, workBuddyBase(ch, credential, false), credential)
 	var apiErr *workbuddyapi.HTTPError
 	if errors.As(err, &apiErr) && apiErr.Status == http.StatusUnauthorized && ch.Id > 0 {
 		credential, err = ResolveWorkBuddyCredential(ctx, ch.Id, credential.AccessToken)
 		if err != nil {
 			return nil, err
 		}
-		infos, err = workbuddyapi.Models(ctx, client, ch.GetBaseURL(), credential)
+		infos, err = workbuddyapi.Models(ctx, client, workBuddyBase(ch, credential, false), credential)
 	}
 	if err != nil {
 		return nil, err
@@ -107,10 +136,7 @@ func FetchWorkBuddyChannelCredits(ch *model.Channel) (*workbuddyapi.Credits, err
 	if err != nil {
 		return nil, err
 	}
-	base := ch.GetBaseURL()
-	if base == "" {
-		base = credential.BillingBase()
-	}
+	base := workBuddyBase(ch, credential, true)
 	credits, err := workbuddyapi.FetchCredits(ctx, client, base, credential)
 	var apiErr *workbuddyapi.HTTPError
 	if errors.As(err, &apiErr) && apiErr.Status == http.StatusUnauthorized && ch.Id > 0 {
@@ -120,7 +146,7 @@ func FetchWorkBuddyChannelCredits(ch *model.Channel) (*workbuddyapi.Credits, err
 		}
 		credits, err = workbuddyapi.FetchCredits(ctx, client, base, credential)
 	}
-	return credits, err
+	return credits, workBuddyCredentialError(err)
 }
 
 // The request pipeline lowers reasoning effort to the levels the upstream

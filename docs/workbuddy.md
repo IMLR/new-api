@@ -39,6 +39,10 @@
 
 续期在三处触发：请求前发现令牌将在 5 分钟内过期、上游返回 401、后台每小时扫描一次已启用渠道。写入使用行锁加进程内互斥锁，并发请求不会丢掉刚轮换的令牌。`expiresIn` 缺失或超过 10 年时保留旧的过期时间，避免刷新风暴或永不刷新。
 
+上游主机的选择规则：运营方填写的 API 地址优先；留空或仍是内置默认地址时，按凭证的 `realm` 决定，国内版用 `copilot.tencent.com`（积分接口用 `www.codebuddy.cn`），国际版用 `www.workbuddy.ai`。聊天、模型目录与令牌续期共用这套规则，避免国际版账号被送到国内主机。
+
+上游返回 `12153`（`refresh token failed`、`invalid_grant`）表示这套登录在上游已经失效，只能重新登录。中转会把这类错误改写成 `WorkBuddy sign-in has expired, sign in again from the channel credentials: ...`，在渠道凭证步骤点「重新登录 WorkBuddy」即可换一套新凭证。
+
 ## 请求头
 
 三类请求头族（common / chat / billing / refresh）按上游要求带齐：
