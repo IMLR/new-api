@@ -9,6 +9,8 @@ import (
 	"io"
 	"sort"
 	"strings"
+
+	"github.com/QuantumNous/new-api/common"
 )
 
 // ErrEmptyStream reports an upstream answer that carried no usable frame.
@@ -32,8 +34,16 @@ type normalizeReader struct {
 	// first fragment.
 	toolCallPending  map[int][]map[string]any
 	toolCallEnvelope map[int]map[string]any
-	done             bool
-	err              error
+	// toolCallIndexByID keeps one index per call id for upstreams that omit
+	// the index on later fragments.
+	toolCallIndexByID map[string]int
+	nextToolCallIndex int
+	// answers counts the frames that carried an answer (text or a tool call)
+	// and lastPayload keeps the most recent raw frame for diagnosis.
+	answers     int
+	lastPayload string
+	done        bool
+	err         error
 }
 
 func (r *normalizeReader) Read(p []byte) (int, error) {
@@ -50,12 +60,7 @@ func (r *normalizeReader) fill() {
 	line, err := r.src.ReadString('\n')
 	if err != nil && line == "" {
 		if err == io.EOF {
-			if !r.done {
-				r.done = true
-				r.buffer.WriteString("data: [DONE]\n\n")
-				return
-			}
-			r.err = io.EOF
+			r.fillTail()
 			return
 		}
 		r.err = err
@@ -71,6 +76,9 @@ func (r *normalizeReader) fill() {
 		return
 	}
 	payload := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(trimmed), "data:"))
+	if len(payload) > 0 {
+		r.lastPayload = payload
+	}
 	if payload == "[DONE]" {
 		r.done = true
 		r.buffer.WriteString("data: [DONE]\n\n")
@@ -86,13 +94,52 @@ func (r *normalizeReader) fill() {
 	}
 }
 
-// fillTail appends the closing marker when the source ended without one.
+// fillTail closes the stream. An upstream that stopped without sending any
+// answer is reported as a failure: a silent end makes strict clients show a
+// generic disconnect message, while an error frame names the real cause.
 func (r *normalizeReader) fillTail() {
+	if !r.done && r.answers == 0 {
+		common.SysError(fmt.Sprintf("workbuddy upstream stream ended without an answer, last frame: %s", truncateFrame(r.lastPayload)))
+		r.buffer.WriteString("data: {\"error\":{\"message\":\"upstream stream ended without an answer\",\"type\":\"upstream_error\"}}\n\n")
+	}
 	if !r.done {
 		r.done = true
 		r.buffer.WriteString("data: [DONE]\n\n")
 	}
 	r.err = io.EOF
+}
+
+// countAnswer records whether a frame carried text or a tool call.
+func (r *normalizeReader) countAnswer(frame map[string]any) {
+	choices, ok := frame["choices"].([]any)
+	if !ok {
+		return
+	}
+	for _, rawChoice := range choices {
+		choice, ok := rawChoice.(map[string]any)
+		if !ok {
+			continue
+		}
+		source, ok := toolCallSource(choice)
+		if !ok {
+			continue
+		}
+		if text, ok := source["content"].(string); ok && strings.TrimSpace(text) != "" {
+			r.answers++
+			return
+		}
+		if calls, ok := source["tool_calls"].([]any); ok && len(calls) > 0 {
+			r.answers++
+			return
+		}
+	}
+}
+
+func truncateFrame(payload string) string {
+	if len(payload) <= 400 {
+		return payload
+	}
+	return payload[:400] + "..."
 }
 
 func (r *normalizeReader) rewrite(payload string) []string {
@@ -115,6 +162,7 @@ func (r *normalizeReader) rewrite(payload string) []string {
 	if r.toolCallNames == nil {
 		r.toolCallNames = map[int]bool{}
 	}
+	r.countAnswer(frame)
 	released := r.splitToolCalls(frame)
 	rewritten := make([]string, 0, 2)
 	if released != nil {
@@ -158,7 +206,7 @@ func (r *normalizeReader) splitToolCalls(frame map[string]any) map[string]any {
 		if !ok {
 			continue
 		}
-		delta, ok := choice["delta"].(map[string]any)
+		delta, ok := toolCallSource(choice)
 		if !ok {
 			continue
 		}
@@ -173,16 +221,21 @@ func (r *normalizeReader) splitToolCalls(frame map[string]any) map[string]any {
 				kept = append(kept, rawCall)
 				continue
 			}
-			index := 0
-			if value, ok := call["index"].(float64); ok {
-				index = int(value)
+			index := r.resolveToolCallIndex(call)
+			if _, hasIndex := call["index"]; !hasIndex {
+				// Fragments without an index are matched by their id, and the
+				// resolved index travels with them so the client can merge them.
+				call["index"] = index
 			}
 			function, _ := call["function"].(map[string]any)
 			name := ""
 			if function != nil {
 				name, _ = function["name"].(string)
-				name = strings.TrimSpace(name)
 			}
+			if name == "" {
+				name, _ = call["name"].(string)
+			}
+			name = strings.TrimSpace(name)
 			switch {
 			case name == "":
 				if function != nil {
@@ -224,6 +277,27 @@ func (r *normalizeReader) splitToolCalls(frame map[string]any) map[string]any {
 		delta["tool_calls"] = kept
 	}
 	return released
+}
+
+// resolveToolCallIndex returns the index of a fragment. Upstreams that omit the
+// index are matched by call id, so parallel calls do not collapse into one.
+func (r *normalizeReader) resolveToolCallIndex(call map[string]any) int {
+	if value, ok := call["index"].(float64); ok {
+		return int(value)
+	}
+	if r.toolCallIndexByID == nil {
+		r.toolCallIndexByID = map[string]int{}
+	}
+	if id, ok := call["id"].(string); ok && id != "" {
+		if index, seen := r.toolCallIndexByID[id]; seen {
+			return index
+		}
+		index := r.nextToolCallIndex
+		r.nextToolCallIndex++
+		r.toolCallIndexByID[id] = index
+		return index
+	}
+	return r.nextToolCallIndex
 }
 
 // holdToolCall keeps a nameless fragment together with the frame envelope, so
@@ -318,6 +392,19 @@ func cloneToolCall(call map[string]any) map[string]any {
 	return clone
 }
 
+// toolCallSource returns the fields that carry the answer. Most frames use
+// delta; some upstream frames deliver the whole message instead, and dropping
+// those would leave the client with an empty answer.
+func toolCallSource(choice map[string]any) (map[string]any, bool) {
+	if delta, ok := choice["delta"].(map[string]any); ok && len(delta) > 0 {
+		return delta, true
+	}
+	if message, ok := choice["message"].(map[string]any); ok && len(message) > 0 {
+		return message, true
+	}
+	return nil, false
+}
+
 // normalizeFrame rebuilds one frame with only the fields the OpenAI streaming
 // shape defines.
 func normalizeFrame(frame map[string]any) map[string]any {
@@ -345,7 +432,7 @@ func normalizeFrame(frame map[string]any) map[string]any {
 				current["index"] = index
 			}
 			delta := map[string]any{}
-			if rawDelta, ok := choice["delta"].(map[string]any); ok {
+			if rawDelta, ok := toolCallSource(choice); ok {
 				if value, ok := rawDelta["role"].(string); ok && value != "" {
 					delta["role"] = value
 				}

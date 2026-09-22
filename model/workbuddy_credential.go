@@ -38,3 +38,31 @@ func WithWorkBuddyCredentialLock(ctx context.Context, id int, update func(*Chann
 		return tx.Model(&Channel{}).Where("id = ?", id).Update("key", next).Error
 	})
 }
+
+// WithWorkBuddyChannelOtherLock runs update against the channel row and stores
+// the replacement other-info JSON it returns (empty string = no change). It
+// serializes the writes of the account task states, which several goroutines
+// touch.
+func WithWorkBuddyChannelOtherLock(ctx context.Context, id int, update func(*Channel) (string, error)) error {
+	entry, _ := workBuddyCredentialLocks.LoadOrStore(id, &sync.Mutex{})
+	lock := entry.(*sync.Mutex)
+	lock.Lock()
+	defer lock.Unlock()
+	return DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var ch Channel
+		if err := lockForUpdate(tx).First(&ch, id).Error; err != nil {
+			return err
+		}
+		if ch.Type != constant.ChannelTypeWorkBuddy {
+			return fmt.Errorf("WorkBuddy channel expected")
+		}
+		next, err := update(&ch)
+		if err != nil {
+			return err
+		}
+		if next == "" || next == ch.OtherInfo {
+			return nil
+		}
+		return tx.Model(&Channel{}).Where("id = ?", id).Update("other_info", next).Error
+	})
+}

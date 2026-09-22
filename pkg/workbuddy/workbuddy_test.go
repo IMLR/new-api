@@ -363,6 +363,59 @@ func TestNormalizeStreamDropsToolCallWithoutName(t *testing.T) {
 	assert.NotContains(t, out, `"name":""`)
 }
 
+func TestNormalizeStreamKeepsMessageFormFrames(t *testing.T) {
+	// Some upstream frames carry the whole message instead of a delta. Dropping
+	// them leaves the client with a stream that never contained an answer.
+	source := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"done\"},\"finish_reason\":\"stop\"}]}",
+		"",
+	}, "\n")
+	out, err := readAll(NormalizeStream(strings.NewReader(source)))
+	require.NoError(t, err)
+	assert.Contains(t, out, "\"content\":\"done\"")
+	assert.NotContains(t, out, "without an answer")
+}
+
+func TestNormalizeStreamMatchesToolCallFragmentsByID(t *testing.T) {
+	// Fragments without an index must not collapse into one call: the second
+	// call would lose its name and strict clients would reject it.
+	source := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"id\":\"call-a\",\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\"}}]}}]}",
+		"",
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"id\":\"call-b\",\"type\":\"function\",\"function\":{\"name\":\"write_file\",\"arguments\":\"{}\"}}]}}]}",
+		"",
+	}, "\n")
+	out, err := readAll(NormalizeStream(strings.NewReader(source)))
+	require.NoError(t, err)
+	assert.Contains(t, out, "\"name\":\"read_file\"")
+	assert.Contains(t, out, "\"name\":\"write_file\"", "both calls keep their name")
+	assert.Contains(t, out, "\"index\":0")
+	assert.Contains(t, out, "\"index\":1")
+}
+
+func TestNormalizeStreamReportsStreamWithoutAnswer(t *testing.T) {
+	source := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"},\"finish_reason\":null}]}",
+		"",
+	}, "\n")
+	out, err := readAll(NormalizeStream(strings.NewReader(source)))
+	require.NoError(t, err)
+	assert.Contains(t, out, "upstream stream ended without an answer")
+	assert.Contains(t, out, "data: [DONE]")
+}
+
+func TestNormalizeStreamKeepsReasoningOnlyStream(t *testing.T) {
+	// A reasoning-only frame carries no answer, but the stream itself is valid:
+	// the relay still reports it to the client instead of failing the turn here.
+	source := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"thinking\"},\"finish_reason\":\"stop\"}]}",
+		"",
+	}, "\n")
+	out, err := readAll(NormalizeStream(strings.NewReader(source)))
+	require.NoError(t, err)
+	assert.Contains(t, out, "thinking")
+}
+
 func toAnySlice(value any) []any {
 	slice, _ := value.([]any)
 	return slice

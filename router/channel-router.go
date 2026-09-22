@@ -74,6 +74,7 @@ var channelPermissionRoutes = []permissionRoute{
 	{method: http.MethodPost, path: "/:id/cline/quota/probe", permission: authz.ChannelOperate, handler: controller.ProbeClineChannelQuota},
 	{method: http.MethodGet, path: "/:id/opencode-go/quota", permission: authz.ChannelRead, handler: controller.GetOpenCodeGoChannelQuota},
 	{method: http.MethodGet, path: "/:id/workbuddy/quota", permission: authz.ChannelRead, handler: controller.GetWorkBuddyChannelQuota},
+	{method: http.MethodPost, path: "/:id/workbuddy/tasks/:task", permission: authz.ChannelOperate, handler: controller.SetWorkBuddyChannelTask},
 	{method: http.MethodPost, path: "/workbuddy/oauth/start", permission: authz.ChannelSensitiveWrite, handler: controller.StartWorkBuddyOAuth},
 	{method: http.MethodPost, path: "/workbuddy/oauth/complete", permission: authz.ChannelSensitiveWrite, handler: controller.CompleteWorkBuddyOAuth},
 	{method: http.MethodPost, path: "/ollama/pull", permission: authz.ChannelSensitiveWrite, handler: controller.OllamaPullModel},

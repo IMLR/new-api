@@ -119,6 +119,7 @@ func main() {
 	service.StartCodexCredentialAutoRefreshTask()
 	service.StartClineCredentialAutoRefreshTask()
 	service.StartWorkBuddyCredentialAutoRefreshTask()
+	service.StartWorkBuddyTaskScheduler()
 
 	// Subscription quota reset task (daily/weekly/monthly/custom)
 	service.StartSubscriptionQuotaResetTask()

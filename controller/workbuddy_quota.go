@@ -30,15 +30,16 @@ type workBuddyQuotaPackage struct {
 }
 
 type workBuddyQuotaData struct {
-	ChannelId   int                     `json:"channel_id"`
-	ChannelName string                  `json:"channel_name"`
-	Account     string                  `json:"account,omitempty"`
-	Realm       string                  `json:"realm"`
-	Remain      int64                   `json:"remain"`
-	Used        int64                   `json:"used"`
-	Size        int64                   `json:"size"`
-	Packages    []workBuddyQuotaPackage `json:"packages"`
-	CheckedAt   string                  `json:"checked_at"`
+	ChannelId   int                             `json:"channel_id"`
+	ChannelName string                          `json:"channel_name"`
+	Account     string                          `json:"account,omitempty"`
+	Realm       string                          `json:"realm"`
+	Remain      int64                           `json:"remain"`
+	Used        int64                           `json:"used"`
+	Size        int64                           `json:"size"`
+	Packages    []workBuddyQuotaPackage         `json:"packages"`
+	Tasks       []service.WorkBuddyTaskSnapshot `json:"tasks"`
+	CheckedAt   string                          `json:"checked_at"`
 }
 
 // GetWorkBuddyChannelQuota reports the credit balance of one WorkBuddy channel.
@@ -62,6 +63,7 @@ func GetWorkBuddyChannelQuota(c *gin.Context) {
 		Used:        credits.Used,
 		Size:        credits.Size,
 		Packages:    workBuddyQuotaPackages(credits, time.Now()),
+		Tasks:       service.WorkBuddyChannelTasks(ch),
 		CheckedAt:   time.Now().Format(time.RFC3339),
 	}
 	if credential != nil {
@@ -69,6 +71,39 @@ func GetWorkBuddyChannelQuota(c *gin.Context) {
 		data.Account = credential.MaskUID()
 	}
 	common.ApiSuccess(c, data)
+}
+
+type workBuddyTaskUpdateRequest struct {
+	Enabled *bool `json:"enabled"`
+}
+
+// SetWorkBuddyChannelTask turns one account task on or off for one channel, so
+// an activity that keeps failing can be left alone without touching the others.
+func SetWorkBuddyChannelTask(c *gin.Context) {
+	ch, err := workBuddyChannelFromRequest(c)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	var request workBuddyTaskUpdateRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		common.ApiError(c, errors.New("invalid request"))
+		return
+	}
+	enabled := true
+	if request.Enabled != nil {
+		enabled = *request.Enabled
+	}
+	if err := service.SetWorkBuddyChannelTask(c.Request.Context(), ch.Id, c.Param("task"), enabled); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	updated, err := model.GetChannelById(ch.Id, true)
+	if err != nil || updated == nil {
+		common.ApiError(c, errors.New("channel reload failed"))
+		return
+	}
+	common.ApiSuccess(c, gin.H{"tasks": service.WorkBuddyChannelTasks(updated)})
 }
 
 func workBuddyChannelFromRequest(c *gin.Context) (*model.Channel, error) {
