@@ -615,3 +615,18 @@ func TestNormalizeStreamKeepsNameWhenUpstreamReusesIndex(t *testing.T) {
 	assert.Contains(t, out, "\"name\":\"write_file\"", "the second call keeps its name")
 	assert.Contains(t, out, "\"index\":1", "the reused index moves to a free slot")
 }
+
+func TestNormalizeStreamReportsDroppedCallsEvenAfterDone(t *testing.T) {
+	// The upstream ends every stream with [DONE]. A stream whose only answer
+	// was dropped must still be visible in the log, otherwise the operator has
+	// nothing to look at when a client reports an empty answer.
+	source := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-10\",\"type\":\"function\",\"function\":{\"arguments\":\"{}\"}}]},\"finish_reason\":null}]}",
+		"",
+		"data: [DONE]",
+		"",
+	}, "\n")
+	out, err := readAll(NormalizeStream(strings.NewReader(source)))
+	require.NoError(t, err)
+	assert.Contains(t, out, "data: [DONE]")
+}

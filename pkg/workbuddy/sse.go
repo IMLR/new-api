@@ -111,12 +111,12 @@ func (r *normalizeReader) fill() {
 // answer is reported as a failure: a silent end makes strict clients show a
 // generic disconnect message, while an error frame names the real cause.
 func (r *normalizeReader) fillTail() {
+	if len(r.toolFrames) > 0 || len(r.toolCallPending) > 0 || (r.answers > 0 && r.forwarded == 0) {
+		common.SysError(fmt.Sprintf(
+			"workbuddy relay stream: answers=%d forwarded=%d calls=%s held=%s last=%s",
+			r.answers, r.forwarded, truncateFrame(strings.Join(r.toolFrames, " ")), truncateFrame(r.heldPayload()), truncateFrame(r.lastPayload)))
+	}
 	if !r.done {
-		if len(r.toolFrames) > 0 || len(r.toolCallPending) > 0 || (r.answers > 0 && r.forwarded == 0) {
-			common.SysError(fmt.Sprintf(
-				"workbuddy relay stream: answers=%d forwarded=%d calls=%s held=%s last=%s",
-				r.answers, r.forwarded, truncateFrame(strings.Join(r.toolFrames, " ")), truncateFrame(r.heldPayload()), truncateFrame(r.lastPayload)))
-		}
 		if r.forwarded == 0 {
 			common.SysError(fmt.Sprintf("workbuddy upstream stream ended without an answer, last frame: %s", truncateFrame(r.lastPayload)))
 			r.buffer.WriteString("data: {\"error\":{\"message\":\"upstream stream ended without an answer\",\"type\":\"upstream_error\"}}\n\n")
