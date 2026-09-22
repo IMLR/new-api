@@ -34,6 +34,9 @@
 - [`docs/personal-frontend-components.md`](./docs/personal-frontend-components.md):
   个人自用版前端的组件清单，按原子层、组合层、业务区块层、页面层拆分，并列出
   各页面使用的接口，作为重新实现前端时的功能覆盖校验依据。
+- [`docs/api-usage.md`](./docs/api-usage.md): 界面与业务实际调用的接口清单，按界面分组。
+- [`docs/api-unused.md`](./docs/api-unused.md): 未被界面使用的接口清单，区分客户端转发接口、
+  协议与运维接口、已移除功能对应的删除候选，以及前端残留的接口封装。
 
 ### 渠道指纹与端点配置（2026-09-20）
 

@@ -351,6 +351,8 @@
 | SetupWizard | 首次初始化：环境检查、创建超级管理员账号 |
 | SessionExpiredNotice | 会话过期后的提示与跳转 |
 
+接口清单另见 [`docs/api-usage.md`](./api-usage.md)（界面与业务使用）与 [`docs/api-unused.md`](./api-unused.md)（未使用）。
+
 ## 六、页面层清单
 
 | 页面 | 组合的区块 | 接口 |
