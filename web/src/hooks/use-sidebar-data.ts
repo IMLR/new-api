@@ -17,20 +17,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import {
-  Activity,
   Box,
   FileText,
   Key,
   LayoutDashboard,
   Radio,
+  ScrollText,
+  Settings2,
   User,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { type SidebarData } from '@/components/layout/types'
-import { getModelsSectionNavItems } from '@/features/system-settings/models/section-registry'
-import { getOperationsSectionNavItems } from '@/features/system-settings/operations/section-registry'
-
 /**
  * Root navigation groups for the application sidebar. Personal build:
  * single-level sidebar, settings sections are inlined as the last group
@@ -46,11 +44,6 @@ export function useSidebarData(): SidebarData {
         title: t('General'),
         items: [
           {
-            title: t('Overview'),
-            url: '/dashboard/overview',
-            icon: Activity,
-          },
-          {
             title: t('Dashboard'),
             url: '/dashboard/models',
             icon: LayoutDashboard,
@@ -64,17 +57,6 @@ export function useSidebarData(): SidebarData {
             title: t('Usage Logs'),
             url: '/usage-logs',
             icon: FileText,
-          },
-        ],
-      },
-      {
-        id: 'personal',
-        title: t('Personal'),
-        items: [
-          {
-            title: t('Profile'),
-            url: '/profile',
-            icon: User,
           },
         ],
       },
@@ -98,8 +80,27 @@ export function useSidebarData(): SidebarData {
         id: 'settings',
         title: t('Settings'),
         items: [
-          ...getModelsSectionNavItems(t),
-          ...getOperationsSectionNavItems(t),
+          {
+            title: t('Advanced Configuration'),
+            url: '/system-settings/models/advanced',
+            icon: Settings2,
+          },
+          {
+            title: t('Logs & Monitoring'),
+            url: '/system-settings/operations/monitoring',
+            icon: ScrollText,
+          },
+        ],
+      },
+      {
+        id: 'personal',
+        title: t('Personal'),
+        items: [
+          {
+            title: t('Profile'),
+            url: '/profile',
+            icon: User,
+          },
         ],
       },
     ],

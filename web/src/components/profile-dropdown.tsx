@@ -109,8 +109,8 @@ export function ProfileDropdown() {
             <DropdownMenuItem
               onClick={() =>
                 navigate({
-                  to: '/system-settings/site/$section',
-                  params: { section: 'system-info' },
+                  to: '/system-settings/models/$section',
+                  params: { section: 'advanced' },
                 })
               }
             >

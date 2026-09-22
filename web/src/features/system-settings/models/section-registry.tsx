@@ -20,7 +20,6 @@ import { ChannelAffinitySection } from '../general/channel-affinity'
 import type { ModelSettings } from '../types'
 import { createSectionRegistry } from '../utils/section-registry'
 import { GlobalSettingsCard } from './global-settings-card'
-import { RatioSettingsCard } from './ratio-settings-card'
 import { RoutingReliabilitySection } from './routing-reliability-section'
 
 function formatJsonForEditor(value: string, fallback: string) {
@@ -33,117 +32,69 @@ function formatJsonForEditor(value: string, fallback: string) {
   }
 }
 
-const getModelPricingDefaults = (settings: ModelSettings) => ({
-  ModelPrice: settings.ModelPrice,
-  ModelRatio: settings.ModelRatio,
-  CacheRatio: settings.CacheRatio,
-  CreateCacheRatio: settings.CreateCacheRatio,
-  CompletionRatio: settings.CompletionRatio,
-  ImageRatio: settings.ImageRatio,
-  AudioRatio: settings.AudioRatio,
-  AudioCompletionRatio: settings.AudioCompletionRatio,
-  ExposeRatioEnabled: settings.ExposeRatioEnabled,
-  BillingMode: settings['billing_setting.billing_mode'],
-  BillingExpr: settings['billing_setting.billing_expr'],
-})
-
-const getGroupPricingDefaults = (settings: ModelSettings) => ({
-  TopupGroupRatio: settings.TopupGroupRatio,
-  GroupRatio: settings.GroupRatio,
-  UserUsableGroups: settings.UserUsableGroups,
-  GroupGroupRatio: settings.GroupGroupRatio,
-  AutoGroups: settings.AutoGroups,
-  DefaultUseAutoGroup: settings.DefaultUseAutoGroup,
-  GroupSpecialUsableGroup:
-    settings['group_ratio_setting.group_special_usable_group'],
-})
-
 const MODELS_SECTIONS = [
   {
-    id: 'model-pricing',
-    titleKey: 'Model Pricing',
+    id: 'advanced',
+    titleKey: 'Advanced Configuration',
     build: (settings: ModelSettings) => (
-      <RatioSettingsCard
-        titleKey='Model Pricing'
-        modelDefaults={getModelPricingDefaults(settings)}
-        groupDefaults={getGroupPricingDefaults(settings)}
-        toolPricesDefault={settings['tool_price_setting.prices']}
-        visibleTabs={['models', 'unset-models', 'tool-prices', 'upstream-sync']}
-      />
-    ),
-  },
-  {
-    id: 'global',
-    titleKey: 'Global Model Configuration',
-    build: (settings: ModelSettings) => (
-      <GlobalSettingsCard
-        defaultValues={{
-          global: {
-            pass_through_request_enabled:
-              settings['global.pass_through_request_enabled'],
-            thinking_model_blacklist: formatJsonForEditor(
-              settings['global.thinking_model_blacklist'],
-              '[]'
-            ),
-            chat_completions_to_responses_policy: formatJsonForEditor(
-              settings['global.chat_completions_to_responses_policy'],
-              '{}'
-            ),
-          },
-          general_setting: {
-            ping_interval_enabled:
-              settings['general_setting.ping_interval_enabled'],
-            ping_interval_seconds:
-              settings['general_setting.ping_interval_seconds'],
-          },
-        }}
-      />
-    ),
-  },
-  {
-    id: 'routing-reliability',
-    titleKey: 'Routing Reliability',
-    build: (settings: ModelSettings) => (
-      <RoutingReliabilitySection
-        defaultValues={{
-          RetryTimes: settings.RetryTimes,
-          ChannelDisableThreshold: settings.ChannelDisableThreshold,
-          AutomaticDisableChannelEnabled:
-            settings.AutomaticDisableChannelEnabled,
-          AutomaticEnableChannelEnabled: settings.AutomaticEnableChannelEnabled,
-          AutomaticDisableKeywords: settings.AutomaticDisableKeywords,
-          AutomaticDisableStatusCodes: settings.AutomaticDisableStatusCodes,
-          AutomaticRetryStatusCodes: settings.AutomaticRetryStatusCodes,
-          'monitor_setting.auto_test_channel_enabled':
-            settings['monitor_setting.auto_test_channel_enabled'],
-          'monitor_setting.auto_test_channel_minutes':
-            settings['monitor_setting.auto_test_channel_minutes'],
-          'monitor_setting.channel_test_mode':
-            settings['monitor_setting.channel_test_mode'],
-        }}
-      />
-    ),
-  },
-  {
-    id: 'channel-affinity',
-    titleKey: 'Channel Affinity',
-    build: (settings: ModelSettings) => (
-      <ChannelAffinitySection
-        defaultValues={{
-          'channel_affinity_setting.enabled':
-            settings['channel_affinity_setting.enabled'],
-          'channel_affinity_setting.switch_on_success':
-            settings['channel_affinity_setting.switch_on_success'],
-          'channel_affinity_setting.keep_on_channel_disabled':
-            settings['channel_affinity_setting.keep_on_channel_disabled'],
-          'channel_affinity_setting.max_entries':
-            settings['channel_affinity_setting.max_entries'],
-          'channel_affinity_setting.default_ttl_seconds':
-            settings['channel_affinity_setting.default_ttl_seconds'],
-          'channel_affinity_setting.rules':
-            settings['channel_affinity_setting.rules'],
-        }}
-      />
+      <div className='space-y-4'>
+        <GlobalSettingsCard
+          defaultValues={{
+            global: {
+              pass_through_request_enabled:
+                settings['global.pass_through_request_enabled'],
+              thinking_model_blacklist: formatJsonForEditor(
+                settings['global.thinking_model_blacklist'],
+                '[]'
+              ),
+              chat_completions_to_responses_policy: formatJsonForEditor(
+                settings['global.chat_completions_to_responses_policy'],
+                '{}'
+              ),
+            },
+            general_setting: {
+              ping_interval_enabled:
+                settings['general_setting.ping_interval_enabled'],
+              ping_interval_seconds:
+                settings['general_setting.ping_interval_seconds'],
+            },
+          }}
+        />
+        <RoutingReliabilitySection
+          defaultValues={{
+            RetryTimes: settings.RetryTimes,
+            ChannelDisableThreshold: settings.ChannelDisableThreshold,
+            AutomaticDisableChannelEnabled:
+              settings.AutomaticDisableChannelEnabled,
+            AutomaticEnableChannelEnabled: settings.AutomaticEnableChannelEnabled,
+            AutomaticDisableKeywords: settings.AutomaticDisableKeywords,
+            AutomaticDisableStatusCodes: settings.AutomaticDisableStatusCodes,
+            AutomaticRetryStatusCodes: settings.AutomaticRetryStatusCodes,
+            'monitor_setting.auto_test_channel_enabled':
+              settings['monitor_setting.auto_test_channel_enabled'],
+            'monitor_setting.auto_test_channel_minutes':
+              settings['monitor_setting.auto_test_channel_minutes'],
+            'monitor_setting.channel_test_mode':
+              settings['monitor_setting.channel_test_mode'],
+          }}
+        />
+        <ChannelAffinitySection
+          defaultValues={{
+            'channel_affinity_setting.enabled':
+              settings['channel_affinity_setting.enabled'],
+            'channel_affinity_setting.switch_on_success':
+              settings['channel_affinity_setting.switch_on_success'],
+            'channel_affinity_setting.keep_on_channel_disabled':
+              settings['channel_affinity_setting.keep_on_channel_disabled'],
+            'channel_affinity_setting.max_entries':
+              settings['channel_affinity_setting.max_entries'],
+            'channel_affinity_setting.default_ttl_seconds':
+              settings['channel_affinity_setting.default_ttl_seconds'],
+            'channel_affinity_setting.rules':
+              settings['channel_affinity_setting.rules'],
+          }}
+        />
+      </div>
     ),
   },
 ] as const
@@ -152,7 +103,7 @@ export type ModelSectionId = (typeof MODELS_SECTIONS)[number]['id']
 
 const modelsRegistry = createSectionRegistry<ModelSectionId, ModelSettings>({
   sections: MODELS_SECTIONS,
-  defaultSection: 'global',
+  defaultSection: 'advanced',
   basePath: '/system-settings/models',
   urlStyle: 'path',
 })

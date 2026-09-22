@@ -31,12 +31,12 @@ const legacyConsoleRoutes: Record<string, string> = {
 }
 
 const legacySettingsTabs: Record<string, string> = {
-  operation: '/system-settings/operations/behavior',
-  ratio: '/system-settings/models/model-pricing',
+  operation: '/system-settings/models/advanced',
+  ratio: '/models/metadata',
   ratelimit: '/system-settings/security/rate-limit',
   models: '/system-settings/models/global',
-  'model-deployment': '/system-settings/models/model-deployment',
-  performance: '/system-settings/operations/performance',
+  'model-deployment': '/system-settings/models/advanced',
+  performance: '/system-settings/operations/monitoring',
   system: '/system-settings/operations/monitoring',
   other: '/system-settings/operations/monitoring',
 }
