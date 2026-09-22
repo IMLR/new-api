@@ -121,9 +121,12 @@ type WorkBuddyTaskSnapshot struct {
 	Description string `json:"description,omitempty"`
 	Hours       []int  `json:"hours,omitempty"`
 	Enabled     bool   `json:"enabled"`
-	Status      string `json:"status"`
-	Message     string `json:"message,omitempty"`
-	At          int64  `json:"at,omitempty"`
+	// Applicable is false when the task never runs for this account, for
+	// example the CN-only check-in on a global account.
+	Applicable bool   `json:"applicable"`
+	Status     string `json:"status"`
+	Message    string `json:"message,omitempty"`
+	At         int64  `json:"at,omitempty"`
 }
 
 // WorkBuddyChannelTasks lists the tasks of one channel with their current day
@@ -131,6 +134,12 @@ type WorkBuddyTaskSnapshot struct {
 func WorkBuddyChannelTasks(ch *model.Channel) []WorkBuddyTaskSnapshot {
 	states := workBuddyTaskStates(ch)
 	today := time.Now().In(workBuddyTaskTimeZone).Format("2006-01-02")
+	realm := ""
+	if ch != nil {
+		if credential, err := workbuddyapi.ParseCredential(ch.Key); err == nil && credential != nil {
+			realm = credential.EffectiveRealm()
+		}
+	}
 	out := make([]WorkBuddyTaskSnapshot, 0, len(workBuddyTaskOrder))
 	for _, task := range workBuddyTasks() {
 		state := states[task.ID]
@@ -140,9 +149,14 @@ func WorkBuddyChannelTasks(ch *model.Channel) []WorkBuddyTaskSnapshot {
 			Description: task.Description,
 			Hours:       task.Hours,
 			Enabled:     state.Enabled == nil || *state.Enabled,
+			Applicable:  true,
 			Status:      workBuddyTaskStatusPending,
 		}
-		if state.Date == today {
+		if realm != "" && !workBuddyTaskServesRealm(task, realm) {
+			snapshot.Applicable = false
+			snapshot.Status = workBuddyTaskStatusSkipped
+			snapshot.Message = fmt.Sprintf("task does not run on the %s deployment", realm)
+		} else if state.Date == today {
 			snapshot.Status = state.Status
 			snapshot.Message = state.Message
 			snapshot.At = state.At
@@ -150,6 +164,19 @@ func WorkBuddyChannelTasks(ch *model.Channel) []WorkBuddyTaskSnapshot {
 		out = append(out, snapshot)
 	}
 	return out
+}
+
+// workBuddyTaskServesRealm reports whether one task runs on one deployment.
+func workBuddyTaskServesRealm(task WorkBuddyTask, realm string) bool {
+	if len(task.Realms) == 0 {
+		return true
+	}
+	for _, candidate := range task.Realms {
+		if candidate == realm {
+			return true
+		}
+	}
+	return false
 }
 
 // SetWorkBuddyChannelTask turns one task on or off for one channel.
@@ -281,19 +308,10 @@ func workBuddyTaskDue(task WorkBuddyTask, state workBuddyTaskState, local time.T
 }
 
 func runWorkBuddyTask(ctx context.Context, channel *model.Channel, task WorkBuddyTask, credential *workbuddyapi.Credential, local time.Time) {
-	if len(task.Realms) > 0 {
-		allowed := false
-		for _, realm := range task.Realms {
-			if realm == credential.EffectiveRealm() {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			recordWorkBuddyTaskState(ctx, channel.Id, task.ID, workBuddyTaskStatusSkipped,
-				fmt.Sprintf("task does not run on the %s deployment", credential.EffectiveRealm()), local)
-			return
-		}
+	if !workBuddyTaskServesRealm(task, credential.EffectiveRealm()) {
+		recordWorkBuddyTaskState(ctx, channel.Id, task.ID, workBuddyTaskStatusSkipped,
+			fmt.Sprintf("task does not run on the %s deployment", credential.EffectiveRealm()), local)
+		return
 	}
 	client, err := workbuddyapi.NewUpstreamClient(channel.GetSetting().Proxy)
 	if err != nil {

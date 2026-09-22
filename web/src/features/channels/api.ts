@@ -202,6 +202,8 @@ export type WorkBuddyTask = {
   description?: string
   hours?: number[]
   enabled: boolean
+  /** False when the task never runs for this account's deployment. */
+  applicable?: boolean
   status: 'pending' | 'done' | 'skipped' | 'failed'
   message?: string
   at?: number

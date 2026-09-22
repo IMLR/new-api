@@ -98,3 +98,22 @@ func countTaskID(id string) int {
 	}
 	return count
 }
+
+func TestWorkBuddyChannelTasksMarkForeignRealmTasksUnavailable(t *testing.T) {
+	// The global deployment has no check-in and no travel, so those tasks must
+	// not look runnable on a global account.
+	global := &model.Channel{
+		Key: `{"accessToken":"a","refreshToken":"r","expiresAt":1,"domain":"www.workbuddy.ai","realm":"global","uid":"u"}`,
+	}
+	tasks := WorkBuddyChannelTasks(global)
+	byID := map[string]WorkBuddyTaskSnapshot{}
+	for _, task := range tasks {
+		byID[task.ID] = task
+	}
+	assert.False(t, byID["checkin"].Applicable, "check-in is CN only")
+	assert.False(t, byID["travel"].Applicable, "travel is CN only")
+	assert.True(t, byID["activity"].Applicable, "activity report runs on both deployments")
+	assert.True(t, byID["keepalive"].Applicable, "token renewal runs on both deployments")
+	assert.Equal(t, workBuddyTaskStatusSkipped, byID["checkin"].Status)
+	assert.NotEmpty(t, byID["checkin"].Message)
+}

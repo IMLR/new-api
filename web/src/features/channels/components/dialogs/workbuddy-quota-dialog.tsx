@@ -280,7 +280,9 @@ export function WorkBuddyQuotaDialog({
                       {task.title}
                     </span>
                     <span className='text-muted-foreground text-xs'>
-                      {taskStatusLabel(task.status, t)}
+                      {task.applicable === false
+                        ? t('N/A')
+                        : taskStatusLabel(task.status, t)}
                     </span>
                   </div>
                   {task.description ? (
@@ -304,7 +306,11 @@ export function WorkBuddyQuotaDialog({
                 </div>
                 <Switch
                   checked={task.enabled}
-                  disabled={busyTask === task.id || !channelId}
+                  disabled={
+                    task.applicable === false ||
+                    busyTask === task.id ||
+                    !channelId
+                  }
                   onCheckedChange={async (checked) => {
                     if (!channelId) return
                     setBusyTask(task.id)
