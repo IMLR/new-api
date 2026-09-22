@@ -5,6 +5,10 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-09-22: Added WorkBuddy / CodeBuddy channels (type 62) with account
+  credential import, automatic token renewal, the upstream request header
+  families, the chat request body pipeline, catalog model discovery and credit
+  balance queries.
 - 2026-09-22: Added OpenCode Go channels (type 61) with credential import,
   model discovery from the public catalog, per-model routing across the chat,
   Messages and Responses endpoints, session id forwarding, and subscription

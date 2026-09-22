@@ -519,6 +519,10 @@ This fork supports Cline credential JSON import, independent token renewal, and 
 
 This fork adds an OpenCode Go channel (type 61) with credential import from `auth.json`, model discovery from the public catalog, per-model routing across the chat, Messages and Responses endpoints, and subscription usage read from `/v1/usage`. See [OpenCode Go channel documentation](./docs/opencode-go.md).
 
+### WorkBuddy channel integration
+
+This fork adds a WorkBuddy / CodeBuddy channel (type 62) with account credential import, automatic token renewal, the upstream request header families, the chat request body pipeline, catalog model discovery and credit balance queries. See [WorkBuddy channel documentation](./docs/workbuddy.md).
+
 ### 渠道中转站检测与模型端点
 
 渠道可独立开启模型指纹候选排名，并为 OpenAI 渠道的各模型保存端点偏好，供普通调用和渠道测试使用。参考库来源、计费行为与结果边界见 [渠道指纹检测说明](docs/channel-fingerprints.md)。
