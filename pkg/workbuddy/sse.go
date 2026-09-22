@@ -35,9 +35,14 @@ type normalizeReader struct {
 	toolCallPending  map[int][]map[string]any
 	toolCallEnvelope map[int]map[string]any
 	// toolCallIndexByID keeps one index per call id for upstreams that omit
-	// the index on later fragments.
+	// the index on later fragments; toolCallIDByIndex is the reverse view and
+	// detects an index the upstream reused for a second call.
 	toolCallIndexByID map[string]int
+	toolCallIDByIndex map[int]string
 	nextToolCallIndex int
+	// lastToolCallIndex is the call that is currently open, so a fragment
+	// without any identity continues it instead of opening a new call.
+	lastToolCallIndex int
 	// answers counts the frames that carried an answer (text or a tool call)
 	// and lastPayload keeps the most recent raw frame for diagnosis.
 	answers int
@@ -319,9 +324,12 @@ func (r *normalizeReader) splitToolCalls(frame map[string]any) map[string]any {
 				continue
 			}
 			index := r.resolveToolCallIndex(call)
-			if _, hasIndex := call["index"]; !hasIndex {
-				// Fragments without an index are matched by their id, and the
-				// resolved index travels with them so the client can merge them.
+			r.lastToolCallIndex = index
+			if value, ok := call["index"].(float64); !ok || int(value) != index {
+				// Fragments without an index are matched by their id, and an
+				// index the upstream reused for another call is moved to a free
+				// slot; either way the resolved index travels with the fragment
+				// so the client merges the pieces of one call.
 				call["index"] = index
 			}
 			function, _ := call["function"].(map[string]any)
@@ -380,22 +388,60 @@ func (r *normalizeReader) splitToolCalls(frame map[string]any) map[string]any {
 // resolveToolCallIndex returns the index of a fragment. Upstreams that omit the
 // index are matched by call id, so parallel calls do not collapse into one.
 func (r *normalizeReader) resolveToolCallIndex(call map[string]any) int {
-	if value, ok := call["index"].(float64); ok {
-		return int(value)
-	}
 	if r.toolCallIndexByID == nil {
 		r.toolCallIndexByID = map[string]int{}
 	}
-	if id, ok := call["id"].(string); ok && id != "" {
+	if r.toolCallIDByIndex == nil {
+		r.toolCallIDByIndex = map[int]string{}
+	}
+	id, _ := call["id"].(string)
+	if value, ok := call["index"].(float64); ok {
+		index := int(value)
+		if id == "" {
+			return index
+		}
+		if known, seen := r.toolCallIndexByID[id]; seen {
+			return known
+		}
+		if owner, taken := r.toolCallIDByIndex[index]; taken && owner != id {
+			// The upstream restarted its numbering for a new call. Keeping the
+			// old index would make the new call look like a repeat, and its
+			// function name would be stripped as a duplicate.
+			index = r.freshToolCallIndex()
+		}
+		r.toolCallIndexByID[id] = index
+		r.toolCallIDByIndex[index] = id
+		if index >= r.nextToolCallIndex {
+			r.nextToolCallIndex = index + 1
+		}
+		return index
+	}
+	if id != "" {
 		if index, seen := r.toolCallIndexByID[id]; seen {
 			return index
 		}
-		index := r.nextToolCallIndex
-		r.nextToolCallIndex++
+		index := r.freshToolCallIndex()
 		r.toolCallIndexByID[id] = index
+		r.toolCallIDByIndex[index] = id
 		return index
 	}
-	return r.nextToolCallIndex
+	return r.lastToolCallIndex
+}
+
+// freshToolCallIndex returns the next index that no call occupies, so a call
+// whose index was reused by the upstream does not collide with a live one.
+func (r *normalizeReader) freshToolCallIndex() int {
+	for {
+		index := r.nextToolCallIndex
+		r.nextToolCallIndex++
+		if _, taken := r.toolCallIDByIndex[index]; taken {
+			continue
+		}
+		if _, held := r.toolCallPending[index]; held {
+			continue
+		}
+		return index
+	}
 }
 
 // holdToolCall keeps a nameless fragment together with the frame envelope, so

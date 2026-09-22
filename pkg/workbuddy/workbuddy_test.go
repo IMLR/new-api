@@ -598,3 +598,20 @@ func TestNormalizeStreamReportsDroppedToolCallAsFailure(t *testing.T) {
 	assert.Contains(t, out, "upstream stream ended without an answer")
 	assert.NotContains(t, out, "call-9")
 }
+
+func TestNormalizeStreamKeepsNameWhenUpstreamReusesIndex(t *testing.T) {
+	// The upstream sometimes restarts its numbering: a second call arrives with
+	// the index of a finished one. The new call must keep its name and receive
+	// a free index, otherwise strict clients merge it into the first call.
+	source := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-a\",\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{}\"}}]},\"finish_reason\":null}]}",
+		"",
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-b\",\"type\":\"function\",\"function\":{\"name\":\"write_file\",\"arguments\":\"{}\"}}]},\"finish_reason\":null}]}",
+		"",
+	}, "\n")
+	out, err := readAll(NormalizeStream(strings.NewReader(source)))
+	require.NoError(t, err)
+	assert.Contains(t, out, "\"name\":\"read_file\"")
+	assert.Contains(t, out, "\"name\":\"write_file\"", "the second call keeps its name")
+	assert.Contains(t, out, "\"index\":1", "the reused index moves to a free slot")
+}
