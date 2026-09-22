@@ -57,7 +57,7 @@ func ResolveWorkBuddyCredential(ctx context.Context, id int, rejectedToken strin
 		if !credential.NeedsRefresh(time.Now(), 5*time.Minute) && (rejectedToken == "" || credential.AccessToken != rejectedToken) {
 			return "", nil
 		}
-		client, err := NewProxyHttpClient(ch.GetSetting().Proxy)
+		client, err := workbuddyapi.NewUpstreamClient(ch.GetSetting().Proxy)
 		if err != nil {
 			return "", err
 		}
@@ -91,7 +91,7 @@ func FetchWorkBuddyChannelModels(ch *model.Channel) ([]string, error) {
 			return nil, err
 		}
 	}
-	client, err := NewProxyHttpClient(ch.GetSetting().Proxy)
+	client, err := workbuddyapi.NewUpstreamClient(ch.GetSetting().Proxy)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +132,7 @@ func FetchWorkBuddyChannelCredits(ch *model.Channel) (*workbuddyapi.Credits, err
 			return nil, err
 		}
 	}
-	client, err := NewProxyHttpClient(ch.GetSetting().Proxy)
+	client, err := workbuddyapi.NewUpstreamClient(ch.GetSetting().Proxy)
 	if err != nil {
 		return nil, err
 	}

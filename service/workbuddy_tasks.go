@@ -295,7 +295,7 @@ func runWorkBuddyTask(ctx context.Context, channel *model.Channel, task WorkBudd
 			return
 		}
 	}
-	client, err := NewProxyHttpClient(channel.GetSetting().Proxy)
+	client, err := workbuddyapi.NewUpstreamClient(channel.GetSetting().Proxy)
 	if err != nil {
 		recordWorkBuddyTaskState(ctx, channel.Id, task.ID, workBuddyTaskStatusFailed, "invalid channel proxy", local)
 		return

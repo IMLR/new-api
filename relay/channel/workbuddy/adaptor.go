@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 
 	"github.com/QuantumNous/new-api/common"
 	workbuddyapi "github.com/QuantumNous/new-api/pkg/workbuddy"
@@ -84,7 +85,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 	prepared := a.prepareBody(raw, info, credential)
 	info.UpstreamRequestBodySize = int64(len(prepared))
 
-	resp, err := channel.DoApiRequest(a, c, info, bytes.NewReader(prepared))
+	resp, err := a.sendRequest(c, info, prepared)
 	if err != nil {
 		return nil, err
 	}
@@ -96,7 +97,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 		}
 		a.credential = refreshed
 		a.base = channelBase(info, refreshed)
-		resp, err = channel.DoApiRequest(a, c, info, bytes.NewReader(prepared))
+		resp, err = a.sendRequest(c, info, prepared)
 		if err != nil {
 			return nil, err
 		}
@@ -127,6 +128,51 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 	}
 	resp.Header.Set("Content-Type", "text/event-stream")
 	return resp, nil
+}
+
+// The upstream gateway serves HTTP/2, where a half dead stream surfaces as
+// "http2: response body closed" in the middle of an answer. The chat path pins
+// HTTP/1.1, so one client is cached per proxy address.
+var workBuddyClients sync.Map
+
+func upstreamClient(proxy string) (*http.Client, error) {
+	if cached, ok := workBuddyClients.Load(proxy); ok {
+		return cached.(*http.Client), nil
+	}
+	client, err := workbuddyapi.NewUpstreamClient(proxy)
+	if err != nil {
+		return nil, err
+	}
+	workBuddyClients.Store(proxy, client)
+	return client, nil
+}
+
+// sendRequest performs one chat request with the pinned transport. It mirrors
+// the shared request builder, including the channel header overrides.
+func (a *Adaptor) sendRequest(c *gin.Context, info *relaycommon.RelayInfo, body []byte) (*http.Response, error) {
+	url, err := a.GetRequestURL(info)
+	if err != nil {
+		return nil, err
+	}
+	request, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	if err := a.SetupRequestHeader(c, &request.Header, info); err != nil {
+		return nil, err
+	}
+	override, err := channel.ResolveHeaderOverride(info, c)
+	if err != nil {
+		return nil, err
+	}
+	for key, value := range override {
+		request.Header.Set(key, value)
+	}
+	client, err := upstreamClient(info.ChannelSetting.Proxy)
+	if err != nil {
+		return nil, err
+	}
+	return client.Do(request)
 }
 
 // unsupportedRelayMode rejects the endpoint families the upstream does not

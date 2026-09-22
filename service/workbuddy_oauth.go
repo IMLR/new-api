@@ -68,7 +68,7 @@ func StartWorkBuddyAuthorizationFlow(ctx context.Context, adminID int, realm, pr
 	if realm != workbuddyapi.RealmGlobal {
 		realm = workbuddyapi.RealmCN
 	}
-	client, err := NewProxyHttpClient(proxyURL)
+	client, err := workbuddyapi.NewUpstreamClient(proxyURL)
 	if err != nil {
 		return nil, errors.New("invalid channel proxy")
 	}
@@ -117,7 +117,7 @@ func PollWorkBuddyAuthorizationFlow(ctx context.Context, adminID int, flowID str
 		removeWorkBuddyOAuthFlow(ctx, normalized)
 		return nil, errWorkBuddyOAuthFlowExpired
 	}
-	client, err := NewProxyHttpClient(record.ProxyURL)
+	client, err := workbuddyapi.NewUpstreamClient(record.ProxyURL)
 	if err != nil {
 		return nil, errors.New("invalid channel proxy")
 	}
