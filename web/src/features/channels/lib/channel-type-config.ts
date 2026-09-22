@@ -46,6 +46,12 @@ export interface ChannelTypeConfig {
  * Configuration for each channel type
  */
 export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
+  62: {
+    id: 62,
+    name: 'WorkBuddy',
+    icon: 'CodeBuddy',
+    defaultBaseUrl: 'https://copilot.tencent.com',
+  },
   61: {
     id: 61,
     name: 'OpenCode Go',

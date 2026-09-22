@@ -174,6 +174,33 @@ export type OpenCodeGoQuotaResponse = {
   data?: OpenCodeGoQuotaData
 }
 
+export type WorkBuddyQuotaPackage = {
+  name: string
+  remain: number
+  used: number
+  size: number
+  expires_at?: string
+  expires_soon?: boolean
+}
+
+export type WorkBuddyQuotaData = {
+  channel_id?: number
+  channel_name?: string
+  account?: string
+  realm?: string
+  remain?: number
+  used?: number
+  size?: number
+  packages?: WorkBuddyQuotaPackage[]
+  checked_at?: string
+}
+
+export type WorkBuddyQuotaResponse = {
+  success: boolean
+  message?: string
+  data?: WorkBuddyQuotaData
+}
+
 // ============================================================================
 // Base Channel CRUD Operations
 // ============================================================================
@@ -508,6 +535,16 @@ export async function getOpenCodeGoQuota(
 ): Promise<OpenCodeGoQuotaResponse> {
   const res = await api.get(
     `/api/channel/${channelId}/opencode-go/quota`,
+    channelActionConfig({ disableDuplicate: true })
+  )
+  return res.data
+}
+
+export async function getWorkBuddyQuota(
+  channelId: number
+): Promise<WorkBuddyQuotaResponse> {
+  const res = await api.get(
+    `/api/channel/${channelId}/workbuddy/quota`,
     channelActionConfig({ disableDuplicate: true })
   )
   return res.data

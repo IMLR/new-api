@@ -34,6 +34,7 @@ import {
 } from './advanced-custom'
 import { normalizeClineCredential } from './cline-credential'
 import { normalizeOpenCodeGoKey } from './opencode-key'
+import { normalizeWorkBuddyCredential } from './workbuddy-credential'
 
 // ============================================================================
 // Form Validation Schema
@@ -345,6 +346,28 @@ export const channelFormSchema = z
           normalizeOpenCodeGoKey(data.key)
         } catch {
           addRequiredIssue(ctx, 'key', 'Invalid OpenCode Go API key')
+        }
+      }
+    }
+    if (data.type === 62) {
+      if (data.multi_key_mode && data.multi_key_mode !== 'single') {
+        addRequiredIssue(
+          ctx,
+          'multi_key_mode',
+          'WorkBuddy requires a single credential per channel'
+        )
+      }
+      if (data.key?.trim()) {
+        try {
+          normalizeWorkBuddyCredential(data.key)
+        } catch (error) {
+          addRequiredIssue(
+            ctx,
+            'key',
+            error instanceof Error && error.message.includes('refreshToken')
+              ? 'WorkBuddy credential requires refreshToken'
+              : 'Invalid WorkBuddy credential'
+          )
         }
       }
     }

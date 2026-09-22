@@ -32,9 +32,11 @@ import {
   getClineQuota,
   getCodexUsage,
   getOpenCodeGoQuota,
+  getWorkBuddyQuota,
   updateChannelBalance,
   type ClineQuotaResponse,
   type OpenCodeGoQuotaResponse,
+  type WorkBuddyQuotaResponse,
 } from '../../api'
 import { channelsQueryKeys } from '../../lib'
 import { useChannels } from '../channels-provider'
@@ -44,6 +46,7 @@ import {
   type CodexUsageDialogData,
 } from './codex-usage-dialog'
 import { OpenCodeGoQuotaDialog } from './opencode-go-quota-dialog'
+import { WorkBuddyQuotaDialog } from './workbuddy-quota-dialog'
 
 type BalanceQueryDialogProps = {
   open: boolean
@@ -68,10 +71,13 @@ export function BalanceQueryDialog({
     useState<ClineQuotaResponse | null>(null)
   const [openCodeGoQuotaResponse, setOpenCodeGoQuotaResponse] =
     useState<OpenCodeGoQuotaResponse | null>(null)
+  const [workBuddyQuotaResponse, setWorkBuddyQuotaResponse] =
+    useState<WorkBuddyQuotaResponse | null>(null)
 
   const isCodex = currentRow?.type === 57
   const isCline = currentRow?.type === 60
   const isOpenCodeGo = currentRow?.type === 61
+  const isWorkBuddy = currentRow?.type === 62
 
   const handleQueryCodexUsage = async () => {
     const row = currentRow
@@ -130,6 +136,25 @@ export function BalanceQueryDialog({
     }
   }
 
+  const handleQueryWorkBuddyQuota = async () => {
+    const row = currentRow
+    if (!row) return
+    setIsQuerying(true)
+    try {
+      const res = await getWorkBuddyQuota(row.id)
+      if (!res.success) {
+        throw new Error(res.message || t('Failed to fetch usage'))
+      }
+      setWorkBuddyQuotaResponse(res)
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error ? error.message : t('Failed to fetch usage')
+      )
+    } finally {
+      setIsQuerying(false)
+    }
+  }
+
   useEffect(() => {
     if (!open) return
     if (isCodex) {
@@ -140,11 +165,15 @@ export function BalanceQueryDialog({
       handleQueryClineQuota()
       return
     }
+    if (isWorkBuddy) {
+      handleQueryWorkBuddyQuota()
+      return
+    }
     if (isOpenCodeGo) {
       handleQueryOpenCodeGoQuota()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, isCodex, isCline, isOpenCodeGo])
+  }, [open, isCodex, isCline, isOpenCodeGo, isWorkBuddy])
 
   if (!currentRow) return null
 
@@ -189,6 +218,7 @@ export function BalanceQueryDialog({
     setCodexUsageResponse(null)
     setClineQuotaResponse(null)
     setOpenCodeGoQuotaResponse(null)
+    setWorkBuddyQuotaResponse(null)
     onOpenChange(false)
   }
 
@@ -247,6 +277,22 @@ export function BalanceQueryDialog({
         channelId={currentRow.id}
         response={openCodeGoQuotaResponse}
         onRefresh={handleQueryOpenCodeGoQuota}
+        isRefreshing={isQuerying}
+      />
+    )
+  }
+
+  if (isWorkBuddy) {
+    return (
+      <WorkBuddyQuotaDialog
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) handleClose()
+        }}
+        channelName={currentRow.name}
+        channelId={currentRow.id}
+        response={workBuddyQuotaResponse}
+        onRefresh={handleQueryWorkBuddyQuota}
         isRefreshing={isQuerying}
       />
     )

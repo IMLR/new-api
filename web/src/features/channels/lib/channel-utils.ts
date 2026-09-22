@@ -54,6 +54,7 @@ export function getChannelTypeIcon(type: number): string {
     58: 'NewAPI', // Advanced Custom
     60: 'Cline',
     61: 'OpenCode',
+    62: 'CodeBuddy',
     59: 'Sub2API', // Sub2API
     3: 'Azure', // Azure
 
