@@ -29,7 +29,7 @@
 | 登录与身份验证 | 登录、两步验证、通行密钥、找回与重置密码、注册（可关闭）、OAuth 回调、初始化向导 | `/sign-in`、`/otp`、`/forgot-password`、`/reset`、`/setup`、`/oauth` |
 | 数据看板 | 模型调用量与消耗统计、性能概览 | `/dashboard/models` |
 | 渠道 | 上游渠道增删改查、测活、额度查询、指纹采样 | `/channels` |
-| 模型 | 模型元数据、供应商、价格与倍率、上游同步 | `/models/metadata` |
+| 模型 | 模型元数据、供应商、价格（美元每百万 token）、元数据上游同步 | `/models/metadata` |
 | API 密钥 | 令牌增删改查、额度与限制 | `/keys` |
 | 使用日志 | 调用记录查询、统计、详情 | `/usage-logs/common` |
 | 高级配置 | 模型行为、重试、渠道自动停用、渠道亲和性 | `/system-settings/models/advanced` |
@@ -65,7 +65,6 @@
 | KeyValueEditor | 键值对列表 | 自定义请求头、增删行 |
 | JsonEditor | 带校验的 JSON 文本 | 语法高亮、格式化、错误提示 |
 | StatusCodeListEditor | 状态码列表 | 数字与区间混输、去重 |
-| ExpressionInput | 计费表达式 | 变量提示、语法校验（分层定价用） |
 
 ### 3.2 展示
 
@@ -201,6 +200,7 @@
 | JsonDiffView | JSON 差异 | 上游同步、参数覆盖对比 |
 | TimingMetricsCell | 耗时明细 | 总耗时、首字时间、按阈值着色 |
 | CostDisplay | 费用明细 | 含工具调用附加费标记 |
+| TieredPricingBreakdown | 分层计费明细 | 只读，按分层定价表达式展示每一段的用量与费用 |
 
 ## 五、业务区块层
 
@@ -224,13 +224,13 @@
 | ChannelTypePicker | 提供商类型选择，可搜索、带图标 |
 | ChannelBasicFields | 名称、类型、状态、备注 |
 | ChannelCredentialEditor | 密钥输入；多密钥模式（单条、批量、多合一的随机与轮询）、批量导入命名前缀、密钥表格（逐条启停与用量统计） |
-| ChannelProviderAuthFields | 提供商专属鉴权：Vertex 的 JSON 与 API Key、AWS 的 AK/SK 与 API Key、Codex 的 OAuth 设备码流程、Cline 凭证导入、OpenCode Go 密钥解析 |
+| ChannelProviderAuthFields | 提供商专属鉴权：Vertex 的 JSON 与 API Key、AWS 的 AK/SK 与 API Key、Codex 的 OAuth 设备码流程、Cline 凭证导入、OpenCode Go 密钥解析、WorkBuddy 的账号登录 |
 | ChannelConnectionFields | 接口地址、代理、自定义请求头、请求 UA |
 | ChannelModelsEditor | 上游拉取模型、手工模型列表、启用模型子集、模型重映射表格、Ollama 模型版本读取 |
 | ChannelGroupFields | 分组多选、预填分组、标签 |
 | ChannelRoutingFields | 优先级、权重、自动测试间隔 |
 | ChannelAdvancedEditor | 参数覆盖 JSON、自定义路由编辑器（模板、鉴权方式、格式转换、路径）、渠道检测设置、风险状态码确认 |
-| ChannelBalancePanel | 余额查询配置、更新余额动作、Cline 与 Codex 额度读取 |
+| ChannelBalancePanel | 余额查询配置、更新余额动作，以及 Cline、Codex、OpenCode Go、WorkBuddy 的额度读取 |
 
 对话框与面板：
 
@@ -251,6 +251,10 @@
 | CodexOAuthDialog | 设备码授权流程 |
 | CodexUsageDialog | 用量与重置额度 |
 | OpenCodeGoQuotaDialog | 订阅额度 |
+| WorkBuddySignInDialog | 账号登录：选择地区（中国、国际）、获取登录链接、完成登录后确认，成功后显示账号 |
+| WorkBuddyCreditsDialog | 积分余额、账号任务、积分包 |
+| AccountTaskList | 账号任务列表：任务名称、运行时间、最近一次状态、逐项启用开关，并标记当前地区不执行的任务 |
+| CreditPackageList | 积分包列表：名称、总量、已用、剩余、到期时间 |
 | ChannelDetectionSettings | 按渠道的检测开关与端点配置 |
 
 ### 5.2 模型
@@ -263,6 +267,7 @@
 | VendorManager | 供应商增删改查，图标与描述 |
 | MissingModelsPanel | 缺失元数据的模型列表与一键补建 |
 | PrefillGroupManager | 预填分组管理，供渠道与模型表单使用 |
+| ModelDescriptionDialog | 在模型列表里直接编辑模型描述（Markdown） |
 | ModelPriceFields | 模型编辑器里的价格输入：计费方式（按量、按次）、输入价格、输出价格、缓存读取价格、缓存写入价格，单位统一为美元每百万 token |
 | ModelPriceColumn | 模型列表的价格列，显示输入与输出价格，没有配置时显示未设置 |
 | PricingRatioAdapter | 把界面上的美元价格换算成后端存储的倍率（输入价格除以 2，其余档位相对输入价格取比例），以及反向读取 |
@@ -355,7 +360,7 @@
 | 页面 | 组合的区块 | 接口 |
 |---|---|---|
 | 数据看板 | 时间与粒度筛选、统计卡、趋势图、消耗分布、模型排行、性能概览、图表偏好 | `/api/data`、`/api/data/self`、`/api/perf-metrics/summary`、`/api/status` |
-| 渠道 | 渠道表或卡片、筛选、批量动作、渠道编辑器、各类诊断对话框 | `/api/channel`、`/api/channel/search`、`/api/channel/${id}`、`/api/channel/${id}/status`、`/api/channel/batch`、`/api/channel/copy/${id}`、`/api/channel/tag`、`/api/channel/models`、`/api/channel/disabled`、`/api/channel/ops`、`/api/channel/test`、`/api/channel/fetch_models`、`/api/channel/update_balance`、`/api/channel/multi_key/manage`、`/api/channel/fingerprint/${id}`、`/api/channel/codex/*`、`/api/channel/${id}/cline/quota`、`/api/channel/${id}/opencode-go/quota`、`/api/group/`、`/api/prefill_group` |
+| 渠道 | 渠道表或卡片、筛选、批量动作、渠道编辑器、各类诊断与额度对话框 | `/api/channel`、`/api/channel/search`、`/api/channel/${id}`、`/api/channel/${id}/status`、`/api/channel/batch`、`/api/channel/copy/${id}`、`/api/channel/tag`、`/api/channel/models`、`/api/channel/disabled`、`/api/channel/ops`、`/api/channel/test`、`/api/channel/fetch_models`、`/api/channel/update_balance`、`/api/channel/multi_key/manage`、`/api/channel/fingerprint/${id}`、`/api/channel/codex/*`、`/api/channel/${id}/cline/quota`、`/api/channel/${id}/opencode-go/quota`、`/api/channel/workbuddy/oauth/start`、`/api/channel/workbuddy/oauth/complete`、`/api/channel/${channelId}/workbuddy/quota`、`/api/channel/${channelId}/workbuddy/tasks/${taskId}`、`/api/group/`、`/api/prefill_group` |
 | 模型 | 模型表（含价格列）、模型编辑器（含价格输入）、供应商管理、缺失模型、预填分组 | `/api/models/`、`/api/models/search`、`/api/models/missing`、`/api/models/sync_upstream`、`/api/vendors/`、`/api/option/`（价格存在 ModelRatio、CompletionRatio、CacheRatio、CreateCacheRatio、ModelPrice 这些选项里） |
 | API 密钥 | 密钥表、密钥编辑器、批量复制、CC Switch 导入 | `/api/token/`、`/api/token/search`、`/api/token/batch`、`/api/token/batch/keys`、`/api/token/${id}/key`、`/api/group/` |
 | 使用日志 | 筛选栏、统计条、日志表或卡片、详情与各类预览弹窗 | `/api/log`、`/api/log/stat`、`/api/user/${userId}` |
