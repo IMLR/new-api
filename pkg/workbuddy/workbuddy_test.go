@@ -583,3 +583,18 @@ func readAll(reader interface{ Read([]byte) (int, error) }) (string, error) {
 		}
 	}
 }
+
+func TestNormalizeStreamReportsDroppedToolCallAsFailure(t *testing.T) {
+	// A stream whose only answer is a tool call without a name is unusable: the
+	// client would end up with an empty turn, so the relay reports it instead.
+	source := strings.Join([]string{
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call-9\",\"type\":\"function\",\"function\":{\"arguments\":\"{\\\"cmd\\\":\\\"ls\\\"}\"}}]},\"finish_reason\":null}]}",
+		"",
+		"data: {\"id\":\"chunk-1\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}",
+		"",
+	}, "\n")
+	out, err := readAll(NormalizeStream(strings.NewReader(source)))
+	require.NoError(t, err)
+	assert.Contains(t, out, "upstream stream ended without an answer")
+	assert.NotContains(t, out, "call-9")
+}

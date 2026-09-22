@@ -41,6 +41,11 @@ type normalizeReader struct {
 	// answers counts the frames that carried an answer (text or a tool call)
 	// and lastPayload keeps the most recent raw frame for diagnosis.
 	answers     int
+	// forwarded counts the frames the client really receives with usable
+	// content: text, or a tool call whose function name is known. A stream
+	// whose raw frames carried tool calls but forwarded none leaves a strict
+	// client with an empty answer, so it is reported as a failure.
+	forwarded   int
 	lastPayload string
 	done        bool
 	err         error
@@ -98,15 +103,87 @@ func (r *normalizeReader) fill() {
 // answer is reported as a failure: a silent end makes strict clients show a
 // generic disconnect message, while an error frame names the real cause.
 func (r *normalizeReader) fillTail() {
-	if !r.done && r.answers == 0 {
-		common.SysError(fmt.Sprintf("workbuddy upstream stream ended without an answer, last frame: %s", truncateFrame(r.lastPayload)))
-		r.buffer.WriteString("data: {\"error\":{\"message\":\"upstream stream ended without an answer\",\"type\":\"upstream_error\"}}\n\n")
+	if !r.done {
+		if len(r.toolCallPending) > 0 || (r.answers > 0 && r.forwarded == 0) {
+			common.SysError(fmt.Sprintf(
+				"workbuddy relay dropped unusable tool calls: answers=%d forwarded=%d held=%s last frame: %s",
+				r.answers, r.forwarded, truncateFrame(r.heldPayload()), truncateFrame(r.lastPayload)))
+		}
+		if r.forwarded == 0 {
+			common.SysError(fmt.Sprintf("workbuddy upstream stream ended without an answer, last frame: %s", truncateFrame(r.lastPayload)))
+			r.buffer.WriteString("data: {\"error\":{\"message\":\"upstream stream ended without an answer\",\"type\":\"upstream_error\"}}\n\n")
+		}
 	}
 	if !r.done {
 		r.done = true
 		r.buffer.WriteString("data: [DONE]\n\n")
 	}
 	r.err = io.EOF
+}
+
+// heldPayload renders the tool call fragments that never received a name, so a
+// dropped answer can be diagnosed from the log alone.
+func (r *normalizeReader) heldPayload() string {
+	if len(r.toolCallPending) == 0 {
+		return ""
+	}
+	indexes := make([]int, 0, len(r.toolCallPending))
+	for index := range r.toolCallPending {
+		indexes = append(indexes, index)
+	}
+	sort.Ints(indexes)
+	fragments := make([]any, 0, len(indexes))
+	for _, index := range indexes {
+		for _, call := range r.toolCallPending[index] {
+			fragments = append(fragments, call)
+		}
+	}
+	raw, err := json.Marshal(fragments)
+	if err != nil {
+		return ""
+	}
+	return string(raw)
+}
+
+// frameCarriesAnswer reports whether one frame holds something a client can
+// use: text content, or a tool call whose name is already known.
+func frameCarriesAnswer(frame map[string]any) bool {
+	choices, ok := frame["choices"].([]any)
+	if !ok {
+		return false
+	}
+	for _, rawChoice := range choices {
+		choice, ok := rawChoice.(map[string]any)
+		if !ok {
+			continue
+		}
+		source, ok := toolCallSource(choice)
+		if !ok {
+			continue
+		}
+		if text, ok := source["content"].(string); ok && strings.TrimSpace(text) != "" {
+			return true
+		}
+		calls, ok := source["tool_calls"].([]any)
+		if !ok {
+			continue
+		}
+		for _, rawCall := range calls {
+			call, ok := rawCall.(map[string]any)
+			if !ok {
+				continue
+			}
+			if function, ok := call["function"].(map[string]any); ok {
+				if name, ok := function["name"].(string); ok && strings.TrimSpace(name) != "" {
+					return true
+				}
+			}
+			if name, ok := call["name"].(string); ok && strings.TrimSpace(name) != "" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // countAnswer records whether a frame carried text or a tool call.
@@ -166,9 +243,13 @@ func (r *normalizeReader) rewrite(payload string) []string {
 	released := r.splitToolCalls(frame)
 	rewritten := make([]string, 0, 2)
 	if released != nil {
+		r.forwarded++
 		if out, err := json.Marshal(normalizeFrame(released)); err == nil {
 			rewritten = append(rewritten, string(out))
 		}
+	}
+	if frameCarriesAnswer(frame) {
+		r.forwarded++
 	}
 	out, err := json.Marshal(normalizeFrame(frame))
 	if err != nil {
