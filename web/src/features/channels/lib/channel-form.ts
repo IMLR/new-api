@@ -33,6 +33,7 @@ import {
   validateAdvancedCustomConfig,
 } from './advanced-custom'
 import { normalizeClineCredential } from './cline-credential'
+import { normalizeOpenCodeGoKey } from './opencode-key'
 
 // ============================================================================
 // Form Validation Schema
@@ -329,6 +330,22 @@ export const channelFormSchema = z
           'key',
           'Codex credential must be a JSON object with access_token and account_id'
         )
+      }
+    }
+    if (data.type === 61) {
+      if (data.multi_key_mode && data.multi_key_mode !== 'single') {
+        addRequiredIssue(
+          ctx,
+          'multi_key_mode',
+          'OpenCode Go requires a single key per channel'
+        )
+      }
+      if (data.key?.trim()) {
+        try {
+          normalizeOpenCodeGoKey(data.key)
+        } catch {
+          addRequiredIssue(ctx, 'key', 'Invalid OpenCode Go API key')
+        }
       }
     }
 

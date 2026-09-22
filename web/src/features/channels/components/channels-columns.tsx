@@ -58,7 +58,9 @@ import { truncateText } from '@/lib/utils'
 import {
   getClineQuota,
   getCodexUsage,
+  getOpenCodeGoQuota,
   type ClineQuotaResponse,
+  type OpenCodeGoQuotaResponse,
 } from '../api'
 import { CHANNEL_STATUS_CONFIG, MODEL_FETCHABLE_TYPES } from '../constants'
 import {
@@ -85,11 +87,12 @@ import { ChannelRowActionsLayoutContext } from './channel-row-actions-context'
 import { useChannels } from './channels-provider'
 import { DataTableRowActions } from './data-table-row-actions'
 import { DataTableTagRowActions } from './data-table-tag-row-actions'
+import { ClineQuotaDialog } from './dialogs/cline-quota-dialog'
 import {
   CodexUsageDialog,
   type CodexUsageDialogData,
 } from './dialogs/codex-usage-dialog'
-import { ClineQuotaDialog } from './dialogs/cline-quota-dialog'
+import { OpenCodeGoQuotaDialog } from './dialogs/opencode-go-quota-dialog'
 import { NumericSpinnerInput } from './numeric-spinner-input'
 
 function parseIonetMeta(otherInfo: string | null | undefined): null | {
@@ -345,6 +348,9 @@ function BalanceCell({ channel }: { channel: Channel }) {
   const [clineQuotaOpen, setClineQuotaOpen] = useState(false)
   const [clineQuotaResponse, setClineQuotaResponse] =
     useState<ClineQuotaResponse | null>(null)
+  const [openCodeGoQuotaOpen, setOpenCodeGoQuotaOpen] = useState(false)
+  const [openCodeGoQuotaResponse, setOpenCodeGoQuotaResponse] =
+    useState<OpenCodeGoQuotaResponse | null>(null)
   const currencyLabel = getCurrencyLabel()
   const tokenSuffix = currencyLabel === 'Tokens' ? ' Tokens' : ''
   const withSuffix = (value: string) =>
@@ -427,7 +433,8 @@ function BalanceCell({ channel }: { channel: Channel }) {
   const variant = getBalanceVariant(balance)
   const isCodexChannel = channel.type === 57
   const isClineChannel = channel.type === 60
-  const isQuotaChannel = isCodexChannel || isClineChannel
+  const isOpenCodeGoChannel = channel.type === 61
+  const isQuotaChannel = isCodexChannel || isClineChannel || isOpenCodeGoChannel
 
   const handleClickUpdate = async () => {
     if (isUpdating) {
@@ -435,9 +442,16 @@ function BalanceCell({ channel }: { channel: Channel }) {
     }
 
     setIsUpdating(true)
-    if (isCodexChannel || isClineChannel) {
+    if (isQuotaChannel) {
       try {
-        if (isClineChannel) {
+        if (isOpenCodeGoChannel) {
+          const res = await getOpenCodeGoQuota(channel.id)
+          if (!res.success) {
+            throw new Error(res.message || t('Failed to fetch usage'))
+          }
+          setOpenCodeGoQuotaResponse(res)
+          setOpenCodeGoQuotaOpen(true)
+        } else if (isClineChannel) {
           const res = await getClineQuota(channel.id)
           if (!res.success) {
             throw new Error(res.message || t('Failed to fetch usage'))
@@ -478,6 +492,8 @@ function BalanceCell({ channel }: { channel: Channel }) {
     remainingTooltipLabel = t('Click to view Codex usage')
   } else if (isClineChannel) {
     remainingTooltipLabel = t('Click to view Cline quota')
+  } else if (isOpenCodeGoChannel) {
+    remainingTooltipLabel = t('Click to view OpenCode Go quota')
   }
   let remainingBadgeVariant: StatusBadgeProps['variant'] = variant
   if (isQuotaChannel) {
@@ -546,6 +562,38 @@ function BalanceCell({ channel }: { channel: Channel }) {
               throw new Error(res.message || t('Failed to fetch usage'))
             }
             setClineQuotaResponse(res)
+          } catch (error) {
+            toast.error(
+              error instanceof Error
+                ? error.message
+                : t('Failed to fetch usage')
+            )
+          } finally {
+            setIsUpdating(false)
+          }
+        }}
+        isRefreshing={isUpdating}
+      />
+
+      <OpenCodeGoQuotaDialog
+        open={openCodeGoQuotaOpen}
+        onOpenChange={setOpenCodeGoQuotaOpen}
+        channelName={channel.name}
+        channelId={channel.id}
+        channelDisplayName={sensitiveVisible ? undefined : SENSITIVE_MASK}
+        channelDisplayId={sensitiveVisible ? undefined : SENSITIVE_MASK}
+        response={openCodeGoQuotaResponse}
+        onRefresh={async () => {
+          if (isUpdating) {
+            return
+          }
+          setIsUpdating(true)
+          try {
+            const res = await getOpenCodeGoQuota(channel.id)
+            if (!res.success) {
+              throw new Error(res.message || t('Failed to fetch usage'))
+            }
+            setOpenCodeGoQuotaResponse(res)
           } catch (error) {
             toast.error(
               error instanceof Error

@@ -46,6 +46,12 @@ export interface ChannelTypeConfig {
  * Configuration for each channel type
  */
 export const CHANNEL_TYPE_CONFIGS: Record<number, ChannelTypeConfig> = {
+  61: {
+    id: 61,
+    name: 'OpenCode Go',
+    icon: 'OpenCode',
+    defaultBaseUrl: 'https://opencode.ai/zen/go',
+  },
   60: {
     id: 60,
     name: 'Cline',

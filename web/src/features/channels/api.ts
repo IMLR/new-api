@@ -146,6 +146,34 @@ export type ClineQuotaProbeResponse = {
   }
 }
 
+export type OpenCodeGoQuotaWindow = {
+  name: string
+  used_percent: number
+  remaining_percent: number
+  reset_in_seconds?: number
+  reset_at?: string
+}
+
+export type OpenCodeGoQuotaModel = {
+  model: string
+  endpoint: string
+}
+
+export type OpenCodeGoQuotaData = {
+  channel_id?: number
+  channel_name?: string
+  key_masked?: string
+  windows?: OpenCodeGoQuotaWindow[]
+  models?: OpenCodeGoQuotaModel[]
+  checked_at?: string
+}
+
+export type OpenCodeGoQuotaResponse = {
+  success: boolean
+  message?: string
+  data?: OpenCodeGoQuotaData
+}
+
 // ============================================================================
 // Base Channel CRUD Operations
 // ============================================================================
@@ -470,6 +498,16 @@ export async function probeClineQuota(
   const res = await api.post(
     `/api/channel/${channelId}/cline/quota/probe`,
     { model },
+    channelActionConfig({ disableDuplicate: true })
+  )
+  return res.data
+}
+
+export async function getOpenCodeGoQuota(
+  channelId: number
+): Promise<OpenCodeGoQuotaResponse> {
+  const res = await api.get(
+    `/api/channel/${channelId}/opencode-go/quota`,
     channelActionConfig({ disableDuplicate: true })
   )
   return res.data

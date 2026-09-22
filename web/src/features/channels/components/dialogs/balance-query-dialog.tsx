@@ -31,8 +31,10 @@ import { formatTimestampToDate } from '@/lib/format'
 import {
   getClineQuota,
   getCodexUsage,
+  getOpenCodeGoQuota,
   updateChannelBalance,
   type ClineQuotaResponse,
+  type OpenCodeGoQuotaResponse,
 } from '../../api'
 import { channelsQueryKeys } from '../../lib'
 import { useChannels } from '../channels-provider'
@@ -41,6 +43,7 @@ import {
   CodexUsageDialog,
   type CodexUsageDialogData,
 } from './codex-usage-dialog'
+import { OpenCodeGoQuotaDialog } from './opencode-go-quota-dialog'
 
 type BalanceQueryDialogProps = {
   open: boolean
@@ -63,9 +66,12 @@ export function BalanceQueryDialog({
     useState<CodexUsageDialogData | null>(null)
   const [clineQuotaResponse, setClineQuotaResponse] =
     useState<ClineQuotaResponse | null>(null)
+  const [openCodeGoQuotaResponse, setOpenCodeGoQuotaResponse] =
+    useState<OpenCodeGoQuotaResponse | null>(null)
 
   const isCodex = currentRow?.type === 57
   const isCline = currentRow?.type === 60
+  const isOpenCodeGo = currentRow?.type === 61
 
   const handleQueryCodexUsage = async () => {
     const row = currentRow
@@ -105,6 +111,25 @@ export function BalanceQueryDialog({
     }
   }
 
+  const handleQueryOpenCodeGoQuota = async () => {
+    const row = currentRow
+    if (!row) return
+    setIsQuerying(true)
+    try {
+      const res = await getOpenCodeGoQuota(row.id)
+      if (!res.success) {
+        throw new Error(res.message || t('Failed to fetch usage'))
+      }
+      setOpenCodeGoQuotaResponse(res)
+    } catch (error: unknown) {
+      toast.error(
+        error instanceof Error ? error.message : t('Failed to fetch usage')
+      )
+    } finally {
+      setIsQuerying(false)
+    }
+  }
+
   useEffect(() => {
     if (!open) return
     if (isCodex) {
@@ -113,9 +138,13 @@ export function BalanceQueryDialog({
     }
     if (isCline) {
       handleQueryClineQuota()
+      return
+    }
+    if (isOpenCodeGo) {
+      handleQueryOpenCodeGoQuota()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, isCodex, isCline])
+  }, [open, isCodex, isCline, isOpenCodeGo])
 
   if (!currentRow) return null
 
@@ -159,6 +188,7 @@ export function BalanceQueryDialog({
     setBalanceUpdatedTime(null)
     setCodexUsageResponse(null)
     setClineQuotaResponse(null)
+    setOpenCodeGoQuotaResponse(null)
     onOpenChange(false)
   }
 
@@ -201,6 +231,22 @@ export function BalanceQueryDialog({
         channelId={currentRow.id}
         response={clineQuotaResponse}
         onRefresh={handleQueryClineQuota}
+        isRefreshing={isQuerying}
+      />
+    )
+  }
+
+  if (isOpenCodeGo) {
+    return (
+      <OpenCodeGoQuotaDialog
+        open={open}
+        onOpenChange={(v) => {
+          if (!v) handleClose()
+        }}
+        channelName={currentRow.name}
+        channelId={currentRow.id}
+        response={openCodeGoQuotaResponse}
+        onRefresh={handleQueryOpenCodeGoQuota}
         isRefreshing={isQuerying}
       />
     )
