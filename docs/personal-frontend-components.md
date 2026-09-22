@@ -292,8 +292,6 @@
 | LogMobileCard | 移动端日志卡片 |
 | LogDetailsDialog | 请求与响应原文、计费明细、重试信息、耗时拆解 |
 | FailReasonDialog | 失败原因 |
-| PromptDialog | 提示词内容 |
-| ImagePreviewDialog、AudioPreviewDialog | 多媒体结果预览 |
 | UserInfoDialog | 管理员查看调用用户信息 |
 | LogScopeTabs | 全部日志与仅本人切换 |
 | SensitiveVisibilityToggle | 隐藏或显示敏感字段 |
