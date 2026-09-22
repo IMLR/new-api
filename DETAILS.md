@@ -28,6 +28,9 @@
 - [`docs/hk-deployment.md`](./docs/hk-deployment.md): native multi-architecture
   GHCR builds, restricted SSH deployment, runtime configuration, health
   verification, and rollback behavior for the Hong Kong VPS.
+- [`docs/personal-frontend-components.md`](./docs/personal-frontend-components.md):
+  个人自用版前端的组件清单，按原子层、组合层、业务区块层、页面层拆分，并列出
+  各页面使用的接口，作为重新实现前端时的功能覆盖校验依据。
 
 ### 渠道指纹与端点配置（2026-09-20）
 
