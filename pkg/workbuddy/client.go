@@ -324,8 +324,18 @@ func mergeModels(primary, secondary []ModelInfo) []ModelInfo {
 	return out
 }
 
+// generationTags mark the catalog entries that generate images or videos. They
+// carry no token limits and the chat endpoint answers them with code 11103
+// ("Backend [mps] is not supported"), so they never belong to the chat catalog.
+var generationTags = []string{
+	"text-to-image",
+	"image-to-image",
+	"text-to-video",
+	"image-to-video",
+}
+
 // nonChatModel filters the entries that are not conversational models:
-// completion and embedding endpoints, tiny output models and image generators.
+// completion and embedding endpoints, tiny output models and media generators.
 func nonChatModel(entry catalogEntry) bool {
 	id := strings.ToLower(strings.TrimSpace(entry.ID))
 	for _, prefix := range []string{"nes-", "completion-", "codewise-"} {
@@ -337,8 +347,10 @@ func nonChatModel(entry catalogEntry) bool {
 		return true
 	}
 	for _, tag := range entry.Tags {
-		if tag == "text-to-image" {
-			return true
+		for _, generation := range generationTags {
+			if tag == generation {
+				return true
+			}
 		}
 	}
 	return false

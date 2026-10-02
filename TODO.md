@@ -5,6 +5,11 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-10-02: Fixed the WorkBuddy channel model list and endpoints: the catalog
+  drops image and video generation entries (`seedance-2.5`,
+  `gpt-image-2.5-sunburst`), the chat completions to Responses conversion
+  policy skips channel types whose upstream serves chat completions only, and
+  channel tests for those types test codex-named models on the chat endpoint.
 - 2026-09-22: Added WorkBuddy / CodeBuddy channels (type 62) with account
   credential import, automatic token renewal, the upstream request header
   families, the chat request body pipeline, catalog model discovery and credit

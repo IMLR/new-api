@@ -169,8 +169,11 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 			requestPath = "/v1/images/generations"
 		}
 
-		// responses-only models
-		if strings.Contains(strings.ToLower(testModel), "codex") {
+		// responses-only models; channels whose upstream speaks chat
+		// completions only are tested on the chat endpoint instead, otherwise
+		// the upstream rejects the Responses body.
+		if strings.Contains(strings.ToLower(testModel), "codex") &&
+			(channel == nil || common.ChannelTypeServesOpenAIResponses(channel.Type)) {
 			requestPath = "/v1/responses"
 		}
 

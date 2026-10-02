@@ -2,6 +2,25 @@ package common
 
 import "github.com/QuantumNous/new-api/constant"
 
+// ChannelTypeServesOpenAIResponses reports whether the upstream of a channel
+// type accepts the OpenAI Responses wire.
+//
+// Only the channel types whose upstream is known to be chat completions only
+// answer false. Everything else keeps the historical assumption (true): the
+// chat-to-responses conversion policy is an operator instruction and a generic
+// OpenAI compatible upstream is expected to follow it.
+func ChannelTypeServesOpenAIResponses(channelType int) bool {
+	switch channelType {
+	case constant.ChannelTypeWorkBuddy:
+		// The upstream serves chat completions only. A Responses body carries
+		// its conversation in input, so the upstream sees no messages and
+		// rejects the request with code 11128 "first message is not system
+		// prompt".
+		return false
+	}
+	return true
+}
+
 // GetEndpointTypesByChannelType 获取渠道最优先端点类型（所有的渠道都支持 OpenAI 端点）
 func GetEndpointTypesByChannelType(channelType int, modelName string) []constant.EndpointType {
 	var endpointTypes []constant.EndpointType

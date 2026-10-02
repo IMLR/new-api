@@ -134,7 +134,15 @@ WorkBuddy 的聊天请求固定走 HTTP/1.1。上游网关支持 HTTP/2，但半
 | `GET {chatBase}/console/enterprises/personal/models` | 国内版企业端点，按 `agents[cli].models` 过滤 |
 | `GET {chatBase}/v2/enterprises/personal/models` | 国际版企业端点 |
 
-非对话条目会被过滤：`nes-`、`completion-`、`codewise-` 前缀，`maxOutputTokens ≤ 256`，以及 tags 含 `text-to-image` 的模型。
+非对话条目会被过滤：`nes-`、`completion-`、`codewise-` 前缀，`maxOutputTokens ≤ 256`，以及 tags 命中图像或视频生成的模型（`text-to-image`、`image-to-image`、`text-to-video`、`image-to-video`）。生成类条目没有上下文长度与输出上限字段，聊天端点对它们回 `code=11103 Backend [mps] is not supported`（例如 `seedance-2.5` 是字节的视频生成模型），列进渠道只会让用户选中后报错。
+
+目录里的 `default-model` / `fast-model` / `balanced-model` / `primary-model` / `deep-model` 是 IDE 的模式别名（展示名 Auto / Fast / Balanced / Primary / Deep），不是具体模型：上游收到别名后自行挑选后端。它们可以正常调用，保留在目录里。
+
+## 请求端点
+
+上游只提供 chat completions 端点，因此渠道只声明 OpenAI 与 Anthropic 两种端点：Claude 请求在中转里转换成 chat completions 再发出。
+
+OpenAI Responses 请求体（对话放在 `input` 里）会被上游当成缺少 `messages`，返回 `code=11128 first message is not system prompt`。所以全局的 chat completions → Responses 转换策略（`chat_completions_to_responses_policy`）对 WorkBuddy 渠道不生效，渠道测试对这类渠道的 `codex` 名称模型也走 chat 端点。
 
 ## 积分余额
 

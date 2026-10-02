@@ -490,6 +490,8 @@ func TestModelsMergesBothCatalogs(t *testing.T) {
 			_, _ = w.Write([]byte(`{"code":0,"data":{"models":[
 				{"id":"glm-5.3","name":"GLM 5.3","maxInputTokens":200000,"maxOutputTokens":8000},
 				{"id":"nes-embed","maxOutputTokens":1000},
+				{"id":"gpt-image-2.5-sunburst","name":"GPT-Image-2.5-Sunburst","tags":["text-to-image","image-to-image"]},
+				{"id":"seedance-2.5","name":"Seedance-2.5","tags":["text-to-video","image-to-video"]},
 				{"id":"deepseek-v4-flash","maxInputTokens":1000000,"reasoning":{"supportedEfforts":["high"],"defaultEffort":"high"}}
 			]}}`))
 		case EnterpriseModelsCN:
@@ -498,6 +500,7 @@ func TestModelsMergesBothCatalogs(t *testing.T) {
 				{"id":"kimi-k3","maxInputTokens":1048576,"tags":["badge:free"]},
 				{"id":"completion-stub","maxOutputTokens":512},
 				{"id":"image-gen","tags":["text-to-image"]},
+				{"id":"image-edit","tags":["image-to-image"]},
 				{"id":"disabled-model","disabled":true,"maxOutputTokens":4096}
 			],"agents":[{"name":"cli","models":["glm-5.3","kimi-k3","completion-stub","image-gen","disabled-model"]}]}}`))
 		default:
@@ -516,6 +519,31 @@ func TestModelsMergesBothCatalogs(t *testing.T) {
 	assert.Equal(t, []string{"glm-5.3", "deepseek-v4-flash", "kimi-k3"}, ids)
 	assert.Equal(t, int64(200000), infos[0].ContextWindow, "the configuration catalog wins")
 	assert.Equal(t, []string{"high"}, infos[1].Efforts)
+}
+
+func TestNonChatModelFiltersGenerationEntries(t *testing.T) {
+	cases := []struct {
+		id        string
+		tags      []string
+		maxOutput int64
+		want      bool
+	}{
+		{id: "gpt-image-2.5-sunburst", tags: []string{"text-to-image", "image-to-image"}, want: true},
+		{id: "hunyuan-image-alpha-edit", tags: []string{"image-to-image"}, want: true},
+		{id: "seedance-2.5", tags: []string{"text-to-video", "image-to-video"}, want: true},
+		{id: "fast-model", want: false},
+		{id: "hy4-preview-f", tags: []string{"craft"}, want: false},
+		{id: "completion-gf", maxOutput: 8192, want: true},
+		{id: "hunyuan-3b", maxOutput: 256, want: true},
+	}
+	for _, tc := range cases {
+		maxOutput := tc.maxOutput
+		if maxOutput == 0 {
+			maxOutput = 64000
+		}
+		entry := catalogEntry{ID: tc.id, Tags: tc.tags, MaxInputTokens: 1000000, MaxOutputTokens: maxOutput}
+		assert.Equal(t, tc.want, nonChatModel(entry), tc.id)
+	}
 }
 
 func TestFetchCreditsAggregatesPackages(t *testing.T) {
