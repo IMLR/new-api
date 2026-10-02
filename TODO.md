@@ -5,6 +5,9 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-10-02: Added bounded WorkBuddy chat retries for HTTP/SSE error `11133`
+  with unchanged request bodies and shared retry limits, cancellation support,
+  preserved upstream business codes and rejected-request parameter summaries.
 - 2026-10-02: Replaced model matching controls with literal include/exclude
   terms, optional case sensitivity, automatic regex generation and live channel
   previews. Channel/model deselections persist across saves, cache refreshes,

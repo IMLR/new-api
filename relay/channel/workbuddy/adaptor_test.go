@@ -1,13 +1,13 @@
 package workbuddy
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	workbuddyapi "github.com/QuantumNous/new-api/pkg/workbuddy"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
@@ -119,19 +119,21 @@ func TestRewriteErrorTurnsEnvelopeIntoOpenAIError(t *testing.T) {
 		Body:       io.NopCloser(strings.NewReader(`{"code":11102,"msg":"model unavailable"}`)),
 		Header:     http.Header{},
 	}
-	rewritten := rewriteError(response)
+	rewritten, err := rewriteError(response)
+	require.NoError(t, err)
 	raw, err := io.ReadAll(rewritten.Body)
 	require.NoError(t, err)
 	var payload map[string]any
-	require.NoError(t, json.Unmarshal(raw, &payload))
+	require.NoError(t, common.Unmarshal(raw, &payload))
 	message := payload["error"].(map[string]any)["message"].(string)
 	assert.Equal(t, "code=11102 msg=model unavailable", message)
+	assert.EqualValues(t, 11102, payload["error"].(map[string]any)["code"])
 	assert.Equal(t, http.StatusBadRequest, rewritten.StatusCode)
 }
 
 func TestErrorResponseReplacesStatusAndBody(t *testing.T) {
 	response := &http.Response{StatusCode: http.StatusOK, Header: http.Header{}, Body: io.NopCloser(strings.NewReader("stream"))}
-	rewritten := errorResponse(response, http.StatusTooManyRequests, "slow down")
+	rewritten := errorResponse(response, http.StatusTooManyRequests, "slow down", nil)
 	assert.Equal(t, http.StatusTooManyRequests, rewritten.StatusCode)
 	raw, _ := io.ReadAll(rewritten.Body)
 	assert.Contains(t, string(raw), "slow down")
@@ -169,7 +171,7 @@ func TestStreamBodyRetriesEmptyAttempt(t *testing.T) {
 		RelayMode:   relayconstant.RelayModeChatCompletions,
 		ChannelMeta: &relaycommon.ChannelMeta{ChannelType: constant.ChannelTypeWorkBuddy},
 	}
-	stream := adaptor.streamBody(testContext(t, nil), info, []byte("{}"), nil,
+	stream := adaptor.streamBody(testContext(t, nil), info, []byte("{}"),
 		io.NopCloser(strings.NewReader(broken)))
 	defer stream.Close()
 

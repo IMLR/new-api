@@ -7,7 +7,6 @@ package workbuddy
 import (
 	"bufio"
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,9 +30,10 @@ const ChannelName = "workbuddy"
 // the streaming and non-streaming answer shapes.
 type Adaptor struct {
 	openai.Adaptor
-	credential *workbuddyapi.Credential
-	meta       workbuddyapi.ChatMeta
-	base       string
+	credential       *workbuddyapi.Credential
+	meta             workbuddyapi.ChatMeta
+	base             string
+	parameterRetries int
 }
 
 func (a *Adaptor) GetChannelName() string { return ChannelName }
@@ -85,7 +85,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 	prepared := a.prepareBody(raw, info, credential)
 	info.UpstreamRequestBodySize = int64(len(prepared))
 
-	resp, err := a.sendRequest(c, info, prepared)
+	resp, err := a.requestChat(c, info, prepared)
 	if err != nil {
 		return nil, err
 	}
@@ -97,13 +97,13 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 		}
 		a.credential = refreshed
 		a.base = channelBase(info, refreshed)
-		resp, err = a.sendRequest(c, info, prepared)
+		resp, err = a.requestChat(c, info, prepared)
 		if err != nil {
 			return nil, err
 		}
 	}
 	if resp.StatusCode >= 400 {
-		return rewriteError(resp), nil
+		return resp, nil
 	}
 	if !info.IsStream {
 		merged, err := workbuddyapi.AggregateStream(resp.Body)
@@ -123,16 +123,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 		}
 		return jsonResponse(resp, merged), nil
 	}
-	frameErr, prefix, err := peekStreamError(resp.Body)
-	if err != nil {
-		resp.Body.Close()
-		return nil, err
-	}
-	if frameErr != nil {
-		resp.Body.Close()
-		return errorResponse(resp, frameErr.status(), frameErr.Error()), nil
-	}
-	resp.Body = a.streamBody(c, info, prepared, prefix, resp.Body)
+	resp.Body = a.streamBody(c, info, prepared, resp.Body)
 	resp.Header.Set("Content-Type", "text/event-stream")
 	return resp, nil
 }
@@ -140,10 +131,10 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 // streamBody wraps the first upstream body so the relay can ask for one more
 // attempt when the stream ends without a usable answer. The frames of a
 // discarded attempt never reach the client.
-func (a *Adaptor) streamBody(c *gin.Context, info *relaycommon.RelayInfo, prepared, prefix []byte, first io.ReadCloser) *retryBody {
+func (a *Adaptor) streamBody(c *gin.Context, info *relaycommon.RelayInfo, prepared []byte, first io.ReadCloser) *retryBody {
 	stream := &retryBody{current: first}
 	stream.reader = workbuddyapi.NormalizeStreamWithRetry(
-		io.MultiReader(bytes.NewReader(prefix), first),
+		first,
 		func() (io.ReadCloser, error) {
 			_ = stream.current.Close()
 			next, err := a.openStream(c, info, prepared)
@@ -162,7 +153,7 @@ func (a *Adaptor) streamBody(c *gin.Context, info *relaycommon.RelayInfo, prepar
 // retry path, where an upstream error is reported as a failed attempt instead of
 // a response of its own.
 func (a *Adaptor) openStream(c *gin.Context, info *relaycommon.RelayInfo, prepared []byte) (io.ReadCloser, error) {
-	resp, err := a.sendRequest(c, info, prepared)
+	resp, err := a.requestChat(c, info, prepared)
 	if err != nil {
 		return nil, err
 	}
@@ -170,19 +161,7 @@ func (a *Adaptor) openStream(c *gin.Context, info *relaycommon.RelayInfo, prepar
 		resp.Body.Close()
 		return nil, fmt.Errorf("workbuddy upstream returned status %d", resp.StatusCode)
 	}
-	frameErr, prefix, err := peekStreamError(resp.Body)
-	if err != nil {
-		resp.Body.Close()
-		return nil, err
-	}
-	if frameErr != nil {
-		resp.Body.Close()
-		return nil, frameErr
-	}
-	return &prefixedBody{
-		Reader: io.MultiReader(bytes.NewReader(prefix), resp.Body),
-		Closer: resp.Body,
-	}, nil
+	return resp.Body, nil
 }
 
 // retryAggregate runs one more upstream attempt for a non streaming request
@@ -354,18 +333,21 @@ func peekStreamError(body io.Reader) (*upstreamFrameError, []byte, error) {
 		}
 		var frame struct {
 			Error *upstreamFrameError `json:"error"`
+			Code  any                 `json:"code"`
+			Msg   string              `json:"msg"`
 		}
-		if common.Unmarshal([]byte(payload), &frame) == nil && frame.Error != nil {
+		if common.Unmarshal([]byte(payload), &frame) == nil {
+			if frame.Error == nil && frame.Code != nil && fmt.Sprint(frame.Code) != "0" {
+				frame.Error = &upstreamFrameError{Code: frame.Code, Message: frame.Msg}
+			}
+			if frame.Error == nil {
+				return nil, reader.read(), nil
+			}
 			if frame.Error.Message == "" {
 				frame.Error.Message = payload
 			}
 			if frame.Error.Code == nil {
-				var envelope struct {
-					Code any `json:"code"`
-				}
-				if common.Unmarshal([]byte(payload), &envelope) == nil {
-					frame.Error.Code = envelope.Code
-				}
+				frame.Error.Code = frame.Code
 			}
 			return frame.Error, raw, nil
 		}
@@ -375,34 +357,35 @@ func peekStreamError(body io.Reader) (*upstreamFrameError, []byte, error) {
 
 // rewriteError converts an upstream error envelope into the OpenAI error shape
 // the relay reports to the caller.
-func rewriteError(resp *http.Response) *http.Response {
+func rewriteError(resp *http.Response) (*http.Response, error) {
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	resp.Body.Close()
 	if err != nil {
-		return resp
+		return nil, err
 	}
 	message := string(raw)
 	var envelope struct {
-		Code int    `json:"code"`
+		Code any    `json:"code"`
 		Msg  string `json:"msg"`
 	}
-	if json.Unmarshal(raw, &envelope) == nil && envelope.Msg != "" {
-		message = fmt.Sprintf("code=%d msg=%s", envelope.Code, envelope.Msg)
+	if common.Unmarshal(raw, &envelope) == nil && envelope.Msg != "" {
+		message = fmt.Sprintf("code=%v msg=%s", envelope.Code, envelope.Msg)
 	}
 	if strings.Contains(message, "Backend [mps] is not supported") {
 		// The media models sit in the same catalog as the chat models; the
 		// video task endpoint serves them.
 		message += "; this model generates media, send it to /v1/video/generations (or /v1/videos) instead"
 	}
-	return errorResponse(resp, resp.StatusCode, message)
+	return errorResponse(resp, resp.StatusCode, message, envelope.Code), nil
 }
 
 // errorResponse replaces a response with a JSON error body.
-func errorResponse(resp *http.Response, status int, message string) *http.Response {
-	body, _ := json.Marshal(map[string]any{
+func errorResponse(resp *http.Response, status int, message string, code any) *http.Response {
+	body, _ := common.Marshal(map[string]any{
 		"error": map[string]any{
 			"message": message,
 			"type":    "workbuddy_upstream_error",
+			"code":    code,
 		},
 	})
 	resp.StatusCode = status

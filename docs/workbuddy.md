@@ -182,6 +182,16 @@ OpenAI Responses 请求体（对话放在 `input` 里）会被上游当成缺少
 
 错误帧预读（`peekStreamError`）用带缓冲的读取器读取第一帧，读取器可能已经把后续帧拉进内存；回放时这些字节一并带回，否则第一帧之后的帧会丢失。
 
+## 参数错误 `11133`（2026-10-02）
+
+`HTTP 400 / code=11133 / Invalid request parameters` 没有给出具体字段。[opencode-codebuddy-oauth 的接入记录](https://github.com/minglo/opencode-codebuddy-oauth/blob/master/README.md) 报告过同构请求稍后重发成功的瞬时故障；[codebuddy-providers 的实测记录](https://github.com/catoncat/codebuddy-providers/blob/main/docs/protocol.md) 也记录了图片使用裸 base64 等真实参数错误返回同一个代码。因此本仓库把重发作为有限恢复措施，持续拒绝仍返回 400。
+
+聊天请求收到 HTTP 400 且业务代码为 `11133`，或首个 SSE 数据帧带同一错误时，使用原账号、原请求体与原会话标识，在 1 秒、4 秒后各重发一次。两次重试额度在同一请求内共用，包括空答复后重新打开的流；请求取消时立即终止等待。其它参数错误与 429 不进入这套重试。已经返回正常数据帧的流保持现有处理，避免重发造成重复正文或工具调用。
+
+错误响应保留上游业务代码，例如 `error.code=11133`。首次准备重试时记录渠道、模型、消息数量、工具数量、`max_tokens`、`reasoning_effort` 与请求字节数，便于比较失败与复测的差异。
+
+2026-10-02 的真实接口排查中，包含原线程历史、图片与约 60 万输入 token 的重建请求成功；复测替换了工具定义并限制输出为 128 token，尚未定位原请求的具体触发字段。自动恢复行为由 HTTP/SSE 测试服务验证，尚未在真实上游复现“11133 后重试成功”。
+
 ## 账号任务与地区
 
 签到与猫猫旅行只在国内版存在，国际版账号没有这两套体系；活跃上报与令牌续期在两边都能运行。任务定义里的 `Realms` 决定它服务哪个地区，渠道页据此把不执行的任务标成不适用并禁用开关，接口返回 `applicable` 字段。
@@ -202,7 +212,7 @@ OpenAI Responses 请求体（对话放在 `input` 里）会被上游当成缺少
 
 注意这些端点是 GET 或 POST 专用：用错方法会得到 `404 Route Not Found`。
 
-代码级验证：请求体改写、请求头、SSE 重建与聚合、模型目录合并、积分解析、令牌续期由 `pkg/workbuddy/workbuddy_test.go` 覆盖；渠道分派与错误帧处理由 `relay/channel/workbuddy/adaptor_test.go` 覆盖；渠道页积分响应由 `controller/workbuddy_quota_test.go` 覆盖。
+代码级验证：请求体改写、请求头、SSE 重建与聚合、模型目录合并、积分解析、令牌续期由 `pkg/workbuddy/workbuddy_test.go` 覆盖；渠道分派与错误帧处理由 `relay/channel/workbuddy/adaptor_test.go` 覆盖；`11133` 的有限重试、取消、错误码保留与避免重复输出由 `relay/channel/workbuddy/upstream_retry_test.go` 覆盖；渠道页积分响应由 `controller/workbuddy_quota_test.go` 覆盖。
 
 ## 与参考实现的差异
 

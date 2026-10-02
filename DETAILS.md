@@ -59,7 +59,7 @@
 ### WorkBuddy 渠道（2026-09-22）
 
 - `pkg/workbuddy/`：账号凭证解析与续期、请求头族、请求体改写管线、SSE 重建与聚合、模型目录与积分余额。
-- `relay/channel/workbuddy/`：按渠道凭证发起请求，处理 401 重试、错误帧与流式/非流式两种下游形态。
+- `relay/channel/workbuddy/`：按渠道凭证发起请求，处理 401 重试、错误帧与流式/非流式两种下游形态；`upstream_retry.go` 处理 `11133` 的有限重试与失败参数摘要。
 - `service/workbuddy.go`、`controller/workbuddy_quota.go`：凭证续期、模型目录读取、积分查询与渠道页积分接口。
 - `web/src/features/channels/components/dialogs/workbuddy-quota-dialog.tsx`：渠道列表中的积分对话框。
 - `docs/workbuddy.md`：功能操作、协议细节及验证范围。
