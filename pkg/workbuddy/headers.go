@@ -144,6 +144,13 @@ func ModelHeaders(h http.Header, cred *Credential) {
 	}
 }
 
+// MediaHeaders serves the image and video generation calls: the chat account
+// header set, with a plain JSON accept because the media API never streams.
+func MediaHeaders(h http.Header, cred *Credential) {
+	ChatHeaders(h, cred, ChatMeta{})
+	h.Set("Accept", "application/json")
+}
+
 // deriveAccountStableID builds a stable 36 hex identifier per account and
 // purpose, so one account always presents the same device to the upstream.
 func deriveAccountStableID(uid, purpose string) string {

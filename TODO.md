@@ -5,6 +5,11 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-10-02: Added WorkBuddy video generation: media models stay in the
+  channel catalog and are relayed through a new task adaptor
+  (`relay/channel/task/workbuddy`) on the gateway's
+  `/v2/videos/generations` and `/v2/videos/tasks` endpoints, so `seedance-2.5`
+  is usable from `POST /v1/video/generations` and `GET /v1/videos/:task_id`.
 - 2026-10-02: Fixed the WorkBuddy channel model list and endpoints: the catalog
   drops image and video generation entries (`seedance-2.5`,
   `gpt-image-2.5-sunburst`), the chat completions to Responses conversion

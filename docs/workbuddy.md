@@ -134,7 +134,7 @@ WorkBuddy 的聊天请求固定走 HTTP/1.1。上游网关支持 HTTP/2，但半
 | `GET {chatBase}/console/enterprises/personal/models` | 国内版企业端点，按 `agents[cli].models` 过滤 |
 | `GET {chatBase}/v2/enterprises/personal/models` | 国际版企业端点 |
 
-非对话条目会被过滤：`nes-`、`completion-`、`codewise-` 前缀，`maxOutputTokens ≤ 256`，以及 tags 命中图像或视频生成的模型（`text-to-image`、`image-to-image`、`text-to-video`、`image-to-video`）。生成类条目没有上下文长度与输出上限字段，聊天端点对它们回 `code=11103 Backend [mps] is not supported`（例如 `seedance-2.5` 是字节的视频生成模型），列进渠道只会让用户选中后报错。
+非对话条目会被过滤：`nes-`、`completion-`、`codewise-` 前缀，`maxOutputTokens ≤ 256`，以及 tags 命中图像生成的模型（`text-to-image`、`image-to-image`）。图像条目没有上下文长度与输出上限字段，聊天端点对它们回 `code=11103 Backend [mps] is not supported`，列进渠道只会让用户选中后报错。视频条目保留在目录里，由视频任务接口转发，见下一节。
 
 目录里的 `default-model` / `fast-model` / `balanced-model` / `primary-model` / `deep-model` 是 IDE 的模式别名（展示名 Auto / Fast / Balanced / Primary / Deep），不是具体模型：上游收到别名后自行挑选后端。它们可以正常调用，保留在目录里。
 
@@ -143,6 +143,24 @@ WorkBuddy 的聊天请求固定走 HTTP/1.1。上游网关支持 HTTP/2，但半
 上游只提供 chat completions 端点，因此渠道只声明 OpenAI 与 Anthropic 两种端点：Claude 请求在中转里转换成 chat completions 再发出。
 
 OpenAI Responses 请求体（对话放在 `input` 里）会被上游当成缺少 `messages`，返回 `code=11128 first message is not system prompt`。所以全局的 chat completions → Responses 转换策略（`chat_completions_to_responses_policy`）对 WorkBuddy 渠道不生效，渠道测试对这类渠道的 `codex` 名称模型也走 chat 端点。
+
+## 视频生成
+
+媒体模型和聊天模型发布在同一个目录里，但媒体模型不在 chat completions 上服务：对它们发聊天请求会得到 `code=11103 Backend [mps] is not supported`（中转会在这条错误后面补一句，说明该模型要用视频接口）。视频生成走同一网关上的另一套 JSON 接口：
+
+| 步骤 | 上游接口 |
+|---|---|
+| 提交 | `POST {chatBase}/v2/videos/generations`，请求体 `{"model":"seedance-2.5","prompt":"..."}`，返回 `data.id` 与 `status` |
+| 查询 | `POST {chatBase}/v2/videos/tasks`，请求体 `{"task_id":"..."}`，返回 `status`（`queued` / `in_progress` / `completed` / `failed`）；完成时产物在 `data.data[].url`，另有 `usage.credit` 与分辨率 |
+
+中转把它接成任务渠道（`relay/channel/task/workbuddy`，平台就是渠道类型 62），下游用视频任务接口调用，后台轮询更新状态：
+
+- `POST /v1/video/generations`（OpenAI 风格为 `POST /v1/videos`），请求体 `{"model":"seedance-2.5","prompt":"..."}`
+- `GET /v1/video/generations/:task_id`（或 `GET /v1/videos/:task_id`）读取状态，成功后 `metadata.url` 是产物地址
+
+计费按次：在「模型定价」里给 `seedance-2.5` 配置价格；没有配置价格时按倍率估算的预扣费会明显偏高。任务失败时由轮询统一退款。
+
+模型目录保留视频条目（tags 含 `text-to-video` / `image-to-video`），图像生成条目（`text-to-image` / `image-to-image`）仍然过滤。参考图字段名还没确认（上游对未知字段直接忽略，无法从错误里判断），目前只保证文本生成视频。
 
 ## 积分余额
 

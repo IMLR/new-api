@@ -389,6 +389,11 @@ func rewriteError(resp *http.Response) *http.Response {
 	if json.Unmarshal(raw, &envelope) == nil && envelope.Msg != "" {
 		message = fmt.Sprintf("code=%d msg=%s", envelope.Code, envelope.Msg)
 	}
+	if strings.Contains(message, "Backend [mps] is not supported") {
+		// The media models sit in the same catalog as the chat models; the
+		// video task endpoint serves them.
+		message += "; this model generates media, send it to /v1/video/generations (or /v1/videos) instead"
+	}
 	return errorResponse(resp, resp.StatusCode, message)
 }
 

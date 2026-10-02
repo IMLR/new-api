@@ -43,6 +43,9 @@ jobs:
       - name: Go regression tests
         if: ${{ !cancelled() }}
         run: go test ./pkg/modelfingerprint ./controller ./model ./service ./router -run 'Test(RankMatchesFrozen|RefusalDoesNot|NumbersSelect|Fingerprint|ChannelTestUsesSaved|ChannelEndpointPreference|ExtractTestReply|ResponsesPolicySkips|ChannelTestEndpointSkips)' -count=1
+      - name: WorkBuddy regression tests
+        if: ${{ !cancelled() }}
+        run: go test ./pkg/workbuddy ./relay/channel/workbuddy ./relay/channel/task/workbuddy -count=1
   build:
     needs: verify
     name: Build multi-platform image
