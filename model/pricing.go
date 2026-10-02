@@ -186,14 +186,16 @@ func updatePricing() {
 	}
 	// 预加载模型元数据与供应商一次，避免循环查询
 	var allMeta []Model
-	_ = DB.Find(&allMeta).Error
+	_ = DB.Order("id ASC").Find(&allMeta).Error
 	metaMap := make(map[string]*Model)
 	prefixList := make([]*Model, 0)
 	suffixList := make([]*Model, 0)
 	containsList := make([]*Model, 0)
 	for i := range allMeta {
 		m := &allMeta[i]
-		if m.NameRule == NameRuleExact {
+		if m.MatchRule != nil {
+			containsList = append(containsList, m)
+		} else if m.NameRule == NameRuleExact {
 			metaMap[m.ModelName] = m
 		} else {
 			switch m.NameRule {
@@ -208,29 +210,18 @@ func updatePricing() {
 	}
 
 	// 将非精确规则模型匹配到 metaMap
-	for _, m := range prefixList {
-		for _, pricingModel := range enableAbilities {
-			if strings.HasPrefix(pricingModel.Model, m.ModelName) {
-				if _, exists := metaMap[pricingModel.Model]; !exists {
-					metaMap[pricingModel.Model] = m
-				}
+	for _, rules := range [][]*Model{prefixList, suffixList, containsList} {
+		for _, m := range rules {
+			matcher, err := m.CompileMatcher()
+			if err != nil {
+				common.SysError(err.Error())
+				continue
 			}
-		}
-	}
-	for _, m := range suffixList {
-		for _, pricingModel := range enableAbilities {
-			if strings.HasSuffix(pricingModel.Model, m.ModelName) {
-				if _, exists := metaMap[pricingModel.Model]; !exists {
-					metaMap[pricingModel.Model] = m
-				}
-			}
-		}
-	}
-	for _, m := range containsList {
-		for _, pricingModel := range enableAbilities {
-			if strings.Contains(pricingModel.Model, m.ModelName) {
-				if _, exists := metaMap[pricingModel.Model]; !exists {
-					metaMap[pricingModel.Model] = m
+			for _, pricingModel := range enableAbilities {
+				if matcher.Matches(pricingModel.Model) {
+					if _, exists := metaMap[pricingModel.Model]; !exists {
+						metaMap[pricingModel.Model] = m
+					}
 				}
 			}
 		}

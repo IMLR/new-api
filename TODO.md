@@ -5,6 +5,10 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-10-02: Replaced model matching controls with literal include/exclude
+  terms, optional case sensitivity, automatic regex generation and live channel
+  previews. Channel/model deselections persist across saves, cache refreshes,
+  ability rebuilds and whole-channel status changes.
 - 2026-10-02: Added WorkBuddy video generation: media models stay in the
   channel catalog and are relayed through a new task adaptor
   (`relay/channel/task/workbuddy`) on the gateway's

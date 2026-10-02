@@ -19,6 +19,11 @@ For commercial licensing, please contact support@quantumnous.com
 import { z } from 'zod'
 
 import type { Model } from '../types'
+import {
+  modelMatchRuleSchema,
+  channelModelSelectionSchema,
+  getModelMatchRule,
+} from './model-matching'
 import { parseModelTags as parseTagsFromUtils } from './model-utils'
 
 // ============================================================================
@@ -36,7 +41,8 @@ export const modelFormSchema = z.object({
   tags: z.array(z.string()).default([]),
   vendor_id: z.number().optional(),
   endpoints: z.string().default(''),
-  name_rule: z.number().min(0).max(3).default(0),
+  match_rule: modelMatchRuleSchema,
+  channel_selections: z.array(channelModelSelectionSchema).default([]),
   status: z.boolean().default(true),
   sync_official: z.boolean().default(true),
   enable_groups: z.array(z.string()).default([]),
@@ -78,7 +84,8 @@ export function transformModelToFormDefaults(model: Model): ModelFormValues {
     tags: parseTagsFromUtils(model.tags),
     vendor_id: model.vendor_id,
     endpoints: model.endpoints || '',
-    name_rule: model.name_rule || 0,
+    match_rule: getModelMatchRule(model),
+    channel_selections: [],
     status: model.status === 1,
     sync_official: model.sync_official === 1,
     enable_groups: model.enable_groups || [],
@@ -100,7 +107,8 @@ export function transformFormDataToModelPayload(
     tags: formatTagsArray(formData.tags),
     vendor_id: formData.vendor_id,
     endpoints: formData.endpoints || '',
-    name_rule: formData.name_rule,
+    match_rule: formData.match_rule,
+    channel_selections: formData.channel_selections,
     status: formData.status ? 1 : 0,
     sync_official: formData.sync_official ? 1 : 0,
     enable_groups: formData.enable_groups,

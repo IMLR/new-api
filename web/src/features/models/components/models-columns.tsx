@@ -34,16 +34,13 @@ import {
 import { formatTimestampToDate } from '@/lib/format'
 import { getLobeIcon } from '@/lib/lobe-icon'
 
-import {
-  getModelStatusConfig,
-  getNameRuleConfig,
-  getQuotaTypeConfig,
-} from '../constants'
+import { getModelStatusConfig, getQuotaTypeConfig } from '../constants'
 import {
   parseModelTags,
   formatEndpointsDisplay,
   type ModelPriceIndex,
 } from '../lib'
+import { getModelMatchRule } from '../lib/model-matching'
 import type { Model, Vendor } from '../types'
 import { DataTableRowActions } from './data-table-row-actions'
 import { DescriptionCell } from './description-cell'
@@ -65,7 +62,6 @@ export function useModelsColumns(
   const { t } = useTranslation()
 
   // Get translated configs
-  const NAME_RULE_CONFIG = getNameRuleConfig(t)
   const MODEL_STATUS_CONFIG = getModelStatusConfig(t)
   const QUOTA_TYPE_CONFIG = getQuotaTypeConfig(t)
 
@@ -144,69 +140,58 @@ export function useModelsColumns(
       minSize: 200,
     },
 
-    // Name Rule column
+    // Literal matching filters
     {
-      accessorKey: 'name_rule',
-      header: t('Match Type'),
+      id: 'matching',
+      header: t('Matching Rules'),
       cell: ({ row }) => {
-        const rule = row.getValue('name_rule') as 0 | 1 | 2 | 3
         const model = row.original
-        const config = NAME_RULE_CONFIG[rule]
-
-        let label = config.label
-        if (rule !== 0 && model.matched_count) {
-          label = `${config.label} (${model.matched_count})`
-        }
-
-        const badge = (
-          <StatusBadge
-            variant={
-              (config.color === 'error' ? 'danger' : config.color) as
-                | 'neutral'
-                | 'success'
-                | 'warning'
-                | 'danger'
-                | 'info'
-            }
-            size='sm'
-            className='-ml-1.5 max-w-none shrink-0'
-          >
-            {label}
-          </StatusBadge>
+        const rule = getModelMatchRule(model)
+        return (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger render={<div className='min-w-0' />}>
+                <span className='block truncate text-xs'>
+                  {rule.include.join(' + ')}
+                </span>
+                {model.matched_count !== undefined && (
+                  <span className='text-muted-foreground text-xs'>
+                    {t('{{count}} matching models', {
+                      count: model.matched_count,
+                    })}
+                  </span>
+                )}
+              </TooltipTrigger>
+              <TooltipContent className='max-h-48 max-w-xs space-y-2 overflow-y-auto'>
+                <p className='break-all'>
+                  {t('Must contain all')}: {rule.include.join(' + ')}
+                </p>
+                {rule.exclude.length > 0 && (
+                  <p className='break-all'>
+                    {t('Must not contain any')}: {rule.exclude.join(', ')}
+                  </p>
+                )}
+                <p>
+                  {rule.case_sensitive
+                    ? t('Case sensitive')
+                    : t('Case insensitive')}
+                </p>
+                <div className='flex flex-wrap gap-1'>
+                  {model.matched_models?.map((name) => (
+                    <StatusBadge
+                      key={name}
+                      label={name}
+                      autoColor={name}
+                      size='sm'
+                    />
+                  ))}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         )
-
-        // Show tooltip with matched models for non-exact rules
-        if (
-          rule !== 0 &&
-          model.matched_models &&
-          model.matched_models.length > 0
-        ) {
-          const matchedBadges = model.matched_models.map((m) => (
-            <StatusBadge key={m} label={m} autoColor={m} size='sm' />
-          ))
-
-          return (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger
-                  render={<div className='inline-flex max-w-full min-w-0' />}
-                >
-                  {badge}
-                </TooltipTrigger>
-                <TooltipContent
-                  side='top'
-                  className='border-border bg-popover max-h-48 max-w-[320px] overflow-y-auto p-2'
-                >
-                  <div className='flex flex-wrap gap-1'>{matchedBadges}</div>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )
-        }
-
-        return badge
       },
-      size: 100,
+      size: 190,
       enableSorting: false,
     },
 

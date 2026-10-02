@@ -82,7 +82,7 @@ import type { ModelSettings } from '@/features/system-settings/types'
 import { safeJsonParse } from '@/features/system-settings/utils/json-parser'
 
 import { createModel, updateModel, getModel, getVendors } from '../../api'
-import { getNameRuleOptions, ENDPOINT_TEMPLATES } from '../../constants'
+import { ENDPOINT_TEMPLATES } from '../../constants'
 import {
   modelsQueryKeys,
   vendorsQueryKeys,
@@ -90,7 +90,13 @@ import {
   buildPricingRatios,
   type PricingPriceInputs,
 } from '../../lib'
+import {
+  modelMatchRuleSchema,
+  channelModelSelectionSchema,
+  getModelMatchRule,
+} from '../../lib/model-matching'
 import type { Model } from '../../types'
+import { ModelMatchingSection } from '../model-matching-section'
 
 // Extended schema for ratio configuration (internal form state only)
 const extendedModelFormSchema = z.object({
@@ -101,7 +107,8 @@ const extendedModelFormSchema = z.object({
   tags: z.array(z.string()),
   vendor_id: z.number().optional(),
   endpoints: z.string(),
-  name_rule: z.number(),
+  match_rule: modelMatchRuleSchema,
+  channel_selections: z.array(channelModelSelectionSchema),
   status: z.boolean(),
   sync_official: z.boolean(),
   price: z.string().optional(),
@@ -181,7 +188,10 @@ function readPricingConfig(
   const price = lookupModelRatio(settings.ModelPrice, modelName)
   const ratio = lookupModelRatio(settings.ModelRatio, modelName)
   const cacheRatio = lookupModelRatio(settings.CacheRatio, modelName)
-  const createCacheRatio = lookupModelRatio(settings.CreateCacheRatio, modelName)
+  const createCacheRatio = lookupModelRatio(
+    settings.CreateCacheRatio,
+    modelName
+  )
   const completionRatio = lookupModelRatio(settings.CompletionRatio, modelName)
 
   // A fixed per-request price wins outright at billing time (see
@@ -374,7 +384,8 @@ export function ModelMutateDrawer({
       tags: [],
       vendor_id: undefined,
       endpoints: '',
-      name_rule: 0,
+      match_rule: getModelMatchRule(),
+      channel_selections: [],
       status: true,
       sync_official: true,
       price: '',
@@ -469,7 +480,8 @@ export function ModelMutateDrawer({
         tags: parseModelTags(model.tags),
         vendor_id: model.vendor_id,
         endpoints: model.endpoints || '',
-        name_rule: model.name_rule || 0,
+        match_rule: getModelMatchRule(model),
+        channel_selections: [],
         status: model.status === 1,
         sync_official: model.sync_official === 1,
         ...pricing.fields,
@@ -495,7 +507,8 @@ export function ModelMutateDrawer({
         tags: [],
         vendor_id: undefined,
         endpoints: '',
-        name_rule: 0,
+        match_rule: getModelMatchRule(currentRow),
+        channel_selections: [],
         status: true,
         sync_official: true,
         ...pricing.fields,
@@ -691,17 +704,19 @@ export function ModelMutateDrawer({
 
           toast.success(
             isEditing
-              ? 'Model updated successfully'
-              : 'Model created successfully'
+              ? t('Model updated successfully')
+              : t('Model created successfully')
           )
-          queryClient.invalidateQueries({ queryKey: modelsQueryKeys.lists() })
+          queryClient.invalidateQueries({ queryKey: modelsQueryKeys.all })
+          queryClient.invalidateQueries({ queryKey: ['channels'] })
+          queryClient.invalidateQueries({ queryKey: ['pricing'] })
           queryClient.invalidateQueries({ queryKey: ['system-options'] })
           onOpenChange(false)
         } else {
-          toast.error(response.message || 'Operation failed')
+          toast.error(response.message || t('Operation failed'))
         }
       } catch (error: unknown) {
-        toast.error((error as Error)?.message || 'Operation failed')
+        toast.error((error as Error)?.message || t('Operation failed'))
       } finally {
         setIsSubmitting(false)
       }
@@ -716,6 +731,7 @@ export function ModelMutateDrawer({
       loadedPricingName,
       modelSettings,
       updateOption,
+      t,
     ]
   )
 
@@ -753,10 +769,6 @@ export function ModelMutateDrawer({
           >
             {/* Basic Information */}
             <SideDrawerSection>
-              <h3 className='text-sm font-semibold'>
-                {t('Basic Information')}
-              </h3>
-
               <FormField
                 control={form.control}
                 name='model_name'
@@ -776,6 +788,39 @@ export function ModelMutateDrawer({
                   </FormItem>
                 )}
               />
+            </SideDrawerSection>
+
+            {/* Matching Configuration */}
+            <SideDrawerSection>
+              <h3 className='text-sm font-semibold'>{t('Matching Rules')}</h3>
+
+              <FormField
+                control={form.control}
+                name='match_rule'
+                render={({ field }) => (
+                  <FormItem>
+                    <ModelMatchingSection
+                      open={open}
+                      showErrors={form.formState.isSubmitted}
+                      rule={field.value}
+                      onRuleChange={field.onChange}
+                      selections={form.watch('channel_selections')}
+                      onSelectionsChange={(selections) =>
+                        form.setValue('channel_selections', selections, {
+                          shouldDirty: true,
+                        })
+                      }
+                    />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </SideDrawerSection>
+
+            <SideDrawerSection>
+              <h3 className='text-sm font-semibold'>
+                {t('Basic Information')}
+              </h3>
 
               <FormField
                 control={form.control}
@@ -878,52 +923,6 @@ export function ModelMutateDrawer({
               />
             </SideDrawerSection>
 
-            {/* Matching Configuration */}
-            <SideDrawerSection>
-              <h3 className='text-sm font-semibold'>{t('Matching Rules')}</h3>
-
-              <FormField
-                control={form.control}
-                name='name_rule'
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>{t('Name Rule')}</FormLabel>
-                    <FormControl>
-                      <RadioGroup
-                        onValueChange={(value) =>
-                          field.onChange(Number.parseInt(value))
-                        }
-                        value={String(field.value)}
-                        className='grid grid-cols-2 gap-4'
-                      >
-                        {getNameRuleOptions(t).map((option) => (
-                          <div
-                            key={option.value}
-                            className='flex items-center space-x-2'
-                          >
-                            <RadioGroupItem
-                              value={String(option.value)}
-                              id={`rule-${option.value}`}
-                            />
-                            <Label
-                              htmlFor={`rule-${option.value}`}
-                              className='cursor-pointer font-normal'
-                            >
-                              {option.label}
-                            </Label>
-                          </div>
-                        ))}
-                      </RadioGroup>
-                    </FormControl>
-                    <FormDescription>
-                      {t('How this model name should match requests')}
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </SideDrawerSection>
-
             {/* Endpoints Configuration */}
             <SideDrawerSection>
               <div className='flex items-center justify-between'>
@@ -986,6 +985,11 @@ export function ModelMutateDrawer({
               <h3 className='text-sm font-semibold'>
                 {t('Pricing Configuration')}
               </h3>
+              <p className='text-muted-foreground text-xs'>
+                {t('Prices below apply to {{model}} only.', {
+                  model: form.watch('model_name') || t('Model Name'),
+                })}
+              </p>
 
               <div className='space-y-4'>
                 <Label>{t('Pricing mode')}</Label>

@@ -18,6 +18,11 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { z } from 'zod'
 
+import {
+  modelMatchRuleSchema,
+  channelModelSelectionSchema,
+} from './lib/model-matching'
+
 // ============================================================================
 // Model Types
 // ============================================================================
@@ -46,12 +51,39 @@ export interface Model {
   created_time: number
   updated_time: number
   name_rule: number
+  match_rule?: ModelMatchRule
+  channel_selections?: ChannelModelSelection[]
   // Runtime fields
   bound_channels?: BoundChannel[]
   enable_groups?: string[]
   quota_types?: number[]
   matched_models?: string[]
   matched_count?: number
+}
+
+export interface ModelMatchRule {
+  include: string[]
+  exclude: string[]
+  case_sensitive: boolean
+}
+
+export interface ChannelModelSelection {
+  channel_id: number
+  model: string
+  selected: boolean
+}
+
+export interface ModelMatchPreview {
+  model: string
+  channels: Array<{
+    id: number
+    name: string
+    type: number
+    groups: string[]
+    enabled: boolean
+    selected: boolean
+    priority: number
+  }>
 }
 
 /**
@@ -235,7 +267,8 @@ export const modelFormSchema = z.object({
   tags: z.array(z.string()).default([]),
   vendor_id: z.number().optional(),
   endpoints: z.string().default(''),
-  name_rule: z.number().min(0).max(3).default(0),
+  match_rule: modelMatchRuleSchema,
+  channel_selections: z.array(channelModelSelectionSchema).default([]),
   status: z.boolean().default(true),
   sync_official: z.boolean().default(true),
 })
@@ -271,11 +304,6 @@ export type PrefillGroupFormValues = z.infer<typeof prefillGroupFormSchema>
 // ============================================================================
 // Utility Types
 // ============================================================================
-
-/**
- * Name rule type
- */
-export type NameRule = 0 | 1 | 2 | 3 // exact, prefix, contains, suffix
 
 /**
  * Model status type

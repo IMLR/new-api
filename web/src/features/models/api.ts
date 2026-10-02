@@ -34,7 +34,21 @@ import type {
   SyncLocale,
   SyncSource,
   SyncOverwritePayload,
+  ModelMatchRule,
+  ModelMatchPreview,
 } from './types'
+
+export async function previewModelMatching(
+  matchRule: ModelMatchRule,
+  signal?: AbortSignal
+): Promise<{ success: boolean; message?: string; data?: ModelMatchPreview[] }> {
+  const res = await api.post(
+    '/api/models/match_preview',
+    { match_rule: matchRule },
+    { signal, skipErrorHandler: true, skipBusinessError: true }
+  )
+  return res.data
+}
 
 // ============================================================================
 // Model CRUD Operations

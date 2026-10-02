@@ -25,6 +25,9 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 interface TagInputProps {
+  id?: string
+  'aria-label'?: string
+  'aria-invalid'?: boolean
   value: string[]
   onChange: (tags: string[]) => void
   placeholder?: string
@@ -33,6 +36,9 @@ interface TagInputProps {
 }
 
 export function TagInput({
+  id,
+  'aria-label': ariaLabel,
+  'aria-invalid': ariaInvalid,
   value = [],
   onChange,
   placeholder,
@@ -61,7 +67,8 @@ export function TagInput({
       e.preventDefault()
       addTag(inputValue)
     } else if (e.key === 'Backspace' && !inputValue && value.length > 0) {
-      removeTag(value[value.length - 1])
+      const lastTag = value.at(-1)
+      if (lastTag) removeTag(lastTag)
     }
   }
 
@@ -80,19 +87,25 @@ export function TagInput({
       onClick={() => inputRef.current?.focus()}
     >
       {value.map((tag) => (
-        <Badge key={tag} variant='secondary' className='gap-1 pr-1'>
-          {tag}
+        <Badge
+          key={tag}
+          variant='secondary'
+          className='max-w-full min-w-0 gap-1 pr-1'
+        >
+          <span className='min-w-0 truncate' title={tag}>
+            {tag}
+          </span>
           {!disabled && (
             <Button
               type='button'
               variant='ghost'
               size='icon-sm'
-              aria-label='Remove tag'
+              aria-label={t('Remove {{tag}}', { tag })}
               onClick={(e) => {
                 e.stopPropagation()
                 removeTag(tag)
               }}
-              className='hover:bg-secondary-foreground/20 size-auto rounded-sm p-0'
+              className='hover:bg-secondary-foreground/20 size-auto shrink-0 rounded-sm p-0'
             >
               <X className='h-3 w-3' aria-hidden='true' />
             </Button>
@@ -100,6 +113,9 @@ export function TagInput({
         </Badge>
       ))}
       <input
+        id={id}
+        aria-label={ariaLabel}
+        aria-invalid={ariaInvalid}
         ref={inputRef}
         type='text'
         value={inputValue}

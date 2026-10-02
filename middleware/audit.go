@@ -105,6 +105,9 @@ var auditRouteActions = map[string]string{
 // 无需在路由上再单独挂一层审计中间件（避免漏挂）。
 func beginAdminAudit(c *gin.Context) *auditResponseWriter {
 	method := c.Request.Method
+	if method == "POST" && c.FullPath() == "/api/models/match_preview" {
+		return nil // Model filter previews only read channel configuration.
+	}
 	if method != "POST" && method != "PUT" && method != "PATCH" && method != "DELETE" {
 		return nil
 	}

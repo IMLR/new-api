@@ -35,16 +35,22 @@ type Model struct {
 	UpdatedTime  int64          `json:"updated_time" gorm:"bigint"`
 	DeletedAt    gorm.DeletedAt `json:"-" gorm:"index;uniqueIndex:uk_model_name_delete_at,priority:2"`
 
-	BoundChannels []BoundChannel `json:"bound_channels,omitempty" gorm:"-"`
-	EnableGroups  []string       `json:"enable_groups,omitempty" gorm:"-"`
-	QuotaTypes    []int          `json:"quota_types,omitempty" gorm:"-"`
-	NameRule      int            `json:"name_rule" gorm:"default:0"`
+	BoundChannels     []BoundChannel          `json:"bound_channels,omitempty" gorm:"-"`
+	EnableGroups      []string                `json:"enable_groups,omitempty" gorm:"-"`
+	QuotaTypes        []int                   `json:"quota_types,omitempty" gorm:"-"`
+	NameRule          int                     `json:"name_rule" gorm:"default:0"`
+	MatchRule         *ModelMatchRule         `json:"match_rule,omitempty" gorm:"type:text"`
+	ChannelSelections []ChannelModelSelection `json:"channel_selections,omitempty" gorm:"-"`
 
 	MatchedModels []string `json:"matched_models,omitempty" gorm:"-"`
 	MatchedCount  int      `json:"matched_count,omitempty" gorm:"-"`
 }
 
 func (mi *Model) Insert() error {
+	return mi.insert(DB)
+}
+
+func (mi *Model) insert(db *gorm.DB) error {
 	now := common.GetTimestamp()
 	mi.CreatedTime = now
 	mi.UpdatedTime = now
@@ -54,12 +60,12 @@ func (mi *Model) Insert() error {
 	originalSyncOfficial := mi.SyncOfficial
 
 	// 先创建记录（GORM 会对零值字段应用默认值）
-	if err := DB.Create(mi).Error; err != nil {
+	if err := db.Create(mi).Error; err != nil {
 		return err
 	}
 
 	// 使用保存的原始值进行更新，确保零值能正确保存
-	return DB.Model(&Model{}).Where("id = ?", mi.Id).Updates(map[string]interface{}{
+	return db.Model(&Model{}).Where("id = ?", mi.Id).Updates(map[string]interface{}{
 		"status":        originalStatus,
 		"sync_official": originalSyncOfficial,
 	}).Error
@@ -75,10 +81,14 @@ func IsModelNameDuplicated(id int, name string) (bool, error) {
 }
 
 func (mi *Model) Update() error {
+	return mi.update(DB)
+}
+
+func (mi *Model) update(db *gorm.DB) error {
 	mi.UpdatedTime = common.GetTimestamp()
 	// 使用 Select 强制更新所有字段，包括零值
-	return DB.Model(&Model{}).Where("id = ?", mi.Id).
-		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "name_rule", "updated_time").
+	return db.Model(&Model{}).Where("id = ?", mi.Id).
+		Select("model_name", "description", "icon", "tags", "vendor_id", "endpoints", "status", "sync_official", "name_rule", "match_rule", "updated_time").
 		Updates(mi).Error
 }
 

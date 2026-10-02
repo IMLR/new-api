@@ -16,55 +16,15 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type TFunction } from 'i18next'
+import type { TFunction } from 'i18next'
 
-import type { NameRule, ModelStatus, SyncSource } from './types'
+import type { ModelStatus, SyncSource } from './types'
 
 // ============================================================================
 // Pagination
 // ============================================================================
 
 export const DEFAULT_PAGE_SIZE = 20
-
-// ============================================================================
-// Name Rule Options
-// ============================================================================
-
-export function getNameRuleOptions(t: TFunction) {
-  return [
-    { label: t('Exact Match'), value: 0 as NameRule },
-    { label: t('Prefix Match'), value: 1 as NameRule },
-    { label: t('Contains Match'), value: 2 as NameRule },
-    { label: t('Suffix Match'), value: 3 as NameRule },
-  ] as const
-}
-
-export function getNameRuleConfig(
-  t: TFunction
-): Record<NameRule, { label: string; color: string; description: string }> {
-  return {
-    0: {
-      label: t('Exact'),
-      color: 'green',
-      description: t('Match model name exactly'),
-    },
-    1: {
-      label: t('Prefix'),
-      color: 'blue',
-      description: t('Match models starting with this name'),
-    },
-    2: {
-      label: t('Contains'),
-      color: 'orange',
-      description: t('Match models containing this name'),
-    },
-    3: {
-      label: t('Suffix'),
-      color: 'purple',
-      description: t('Match models ending with this name'),
-    },
-  }
-}
 
 // ============================================================================
 // Model Status

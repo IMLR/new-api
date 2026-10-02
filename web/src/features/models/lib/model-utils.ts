@@ -16,12 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-import { type TFunction } from 'i18next'
+import type { TFunction } from 'i18next'
 
 import { formatTimestampToDate } from '@/lib/format'
 
-import { getNameRuleConfig, getQuotaTypeConfig } from '../constants'
-import type { NameRule, Model } from '../types'
+import { getQuotaTypeConfig } from '../constants'
+import type { Model } from '../types'
 
 // ============================================================================
 // Time Formatting
@@ -115,26 +115,6 @@ export function formatEndpointsDisplay(
   }
 
   return []
-}
-
-// ============================================================================
-// Name Rule Utils
-// ============================================================================
-
-/**
- * Get name rule label
- */
-export function getNameRuleLabelByRule(rule: NameRule, t: TFunction): string {
-  const config = getNameRuleConfig(t)
-  return config[rule]?.label || '-'
-}
-
-/**
- * Get name rule config by rule
- */
-export function getNameRuleConfigByRule(rule: NameRule, t: TFunction) {
-  const config = getNameRuleConfig(t)
-  return config[rule] || config[0]
 }
 
 // ============================================================================

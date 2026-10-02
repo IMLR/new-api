@@ -42,9 +42,24 @@ func InitChannelCache() {
 	}
 	var abilities []*Ability
 	DB.Find(&abilities)
+	excluded, err := getAllChannelModelExclusions(DB)
+	if err != nil {
+		common.SysError("load channel model exclusions: " + err.Error())
+		return
+	}
 	groups := make(map[string]bool)
+	disabledAbilities := make(map[string]map[string]map[int]bool)
 	for _, ability := range abilities {
 		groups[ability.Group] = true
+		if !ability.Enabled {
+			if disabledAbilities[ability.Group] == nil {
+				disabledAbilities[ability.Group] = make(map[string]map[int]bool)
+			}
+			if disabledAbilities[ability.Group][ability.Model] == nil {
+				disabledAbilities[ability.Group][ability.Model] = make(map[int]bool)
+			}
+			disabledAbilities[ability.Group][ability.Model][ability.ChannelId] = true
+		}
 	}
 	newGroup2model2channels := make(map[string]map[string][]int)
 	for group := range groups {
@@ -58,6 +73,9 @@ func InitChannelCache() {
 		for _, group := range groups {
 			models := strings.Split(channel.Models, ",")
 			for _, model := range models {
+				if excluded[channel.Id][model] || disabledAbilities[group][model][channel.Id] {
+					continue
+				}
 				if _, ok := newGroup2model2channels[group][model]; !ok {
 					newGroup2model2channels[group][model] = make([]int, 0)
 				}

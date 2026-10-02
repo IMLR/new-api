@@ -1,10 +1,8 @@
 package controller
 
 import (
-	"encoding/json"
 	"sort"
 	"strconv"
-	"strings"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -106,9 +104,12 @@ func CreateModelMeta(c *gin.Context) {
 		return
 	}
 
-	if err := m.Insert(); err != nil {
+	if err := m.SaveWithChannelSelections(true); err != nil {
 		common.ApiError(c, err)
 		return
+	}
+	if len(m.ChannelSelections) > 0 {
+		model.InitChannelCache()
 	}
 	model.RefreshPricing()
 	common.ApiSuccess(c, &m)
@@ -144,10 +145,13 @@ func UpdateModelMeta(c *gin.Context) {
 			return
 		}
 
-		if err := m.Update(); err != nil {
+		if err := m.SaveWithChannelSelections(false); err != nil {
 			common.ApiError(c, err)
 			return
 		}
+	}
+	if len(m.ChannelSelections) > 0 {
+		model.InitChannelCache()
 	}
 	model.RefreshPricing()
 	common.ApiSuccess(c, &m)
@@ -183,7 +187,7 @@ func enrichModels(models []*model.Model) {
 		if m == nil {
 			continue
 		}
-		if m.NameRule == model.NameRuleExact {
+		if m.MatchRule == nil && m.NameRule == model.NameRuleExact {
 			exactNames = append(exactNames, m.ModelName)
 			exactIdx[m.ModelName] = append(exactIdx[m.ModelName], i)
 		} else {
@@ -201,7 +205,7 @@ func enrichModels(models []*model.Model) {
 			mm := models[idx]
 			if mm.Endpoints == "" {
 				eps := model.GetModelSupportEndpointTypes(mm.ModelName)
-				if b, err := json.Marshal(eps); err == nil {
+				if b, err := common.Marshal(eps); err == nil {
 					mm.Endpoints = string(b)
 				}
 			}
@@ -223,20 +227,17 @@ func enrichModels(models []*model.Model) {
 	endpointSetByIdx := make(map[int]map[constant.EndpointType]struct{})
 	groupSetByIdx := make(map[int]map[string]struct{})
 	quotaSetByIdx := make(map[int]map[int]struct{})
+	matchers := make(map[int]*model.ModelMatcher)
+	for _, idx := range ruleIndices {
+		if matcher, err := models[idx].CompileMatcher(); err == nil {
+			matchers[idx] = matcher
+		}
+	}
 
 	for _, p := range pricings {
 		for _, idx := range ruleIndices {
-			mm := models[idx]
-			var matched bool
-			switch mm.NameRule {
-			case model.NameRulePrefix:
-				matched = strings.HasPrefix(p.ModelName, mm.ModelName)
-			case model.NameRuleSuffix:
-				matched = strings.HasSuffix(p.ModelName, mm.ModelName)
-			case model.NameRuleContains:
-				matched = strings.Contains(p.ModelName, mm.ModelName)
-			}
-			if !matched {
+			matcher := matchers[idx]
+			if matcher == nil || !matcher.Matches(p.ModelName) {
 				continue
 			}
 			matchedNamesByIdx[idx] = append(matchedNamesByIdx[idx], p.ModelName)
@@ -291,7 +292,7 @@ func enrichModels(models []*model.Model) {
 			for et := range es {
 				eps = append(eps, et)
 			}
-			if b, err := json.Marshal(eps); err == nil {
+			if b, err := common.Marshal(eps); err == nil {
 				mm.Endpoints = string(b)
 			}
 		}

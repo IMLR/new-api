@@ -48,6 +48,7 @@ func TestMain(m *testing.M) {
 		&Channel{},
 		&QuotaData{},
 		&Ability{},
+		&ChannelModelExclusion{},
 		&TopUp{},
 		&SubscriptionPlan{},
 		&SubscriptionOrder{},
