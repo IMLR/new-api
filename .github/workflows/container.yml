@@ -51,6 +51,9 @@ jobs:
         run: |
           go test ./pkg/cline ./relay/channel/cline -count=1
           go test ./model ./service ./controller ./middleware -run 'Test(ChannelModelCooldown|ChannelSelection|FilterUnavailable|Relay(Retries|KeepsLast|RetryStops)|AutoGroupRetry)' -count=1
+      - name: Model matching routing regression tests
+        if: ${{ !cancelled() }}
+        run: go test ./model ./controller ./middleware ./relay/helper ./relay/common -run 'Test(ModelRule|ModelMatchingAndExplicit|CompactAutomatic|Passthrough)' -count=1
   build:
     needs: verify
     name: Build multi-platform image
