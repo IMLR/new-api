@@ -235,7 +235,7 @@
 
 | 组件 | 职责 |
 |---|---|
-| ChannelTestDialog | 单渠道测试与批量测试，展示流式结果 |
+| ChannelTestDialog | 单渠道测试、批量测试与自定义提示词测试，展示流式结果与模型回复 |
 | FetchModelsDialog | 从上游拉取模型并选择写入 |
 | MissingModelsDialog | 列出缺失元数据的模型并补建 |
 | CopyChannelDialog | 复制渠道，选择目标分组与名称 |

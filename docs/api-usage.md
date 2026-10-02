@@ -106,6 +106,7 @@
 | GET | `/api/channel/tag/models` | 读取某个标签下的模型 |
 | GET | `/api/channel/test` | 测试全部渠道 |
 | GET | `/api/channel/test/:id` | 测试单个渠道 |
+| POST | `/api/channel/test/:id` | 用自定义提示词测试单个渠道，返回模型回复 |
 | GET | `/api/channel/update_balance` | 更新全部渠道余额 |
 | GET | `/api/channel/update_balance/:id` | 更新单个渠道余额 |
 | POST | `/api/channel/upstream_updates/apply` | 应用单个渠道的上游模型变化 |
@@ -190,4 +191,3 @@
 | GET | `/api/system-info/instances` | 系统信息：实例列表 |
 | DELETE | `/api/system-info/instances/:node_name` | 系统信息：删除单个失效实例 |
 | DELETE | `/api/system-info/stale-instances` | 系统信息：清理全部失效实例 |
-

@@ -190,6 +190,11 @@ export interface ChannelTestResponse {
   }
 }
 
+export interface ChannelTestPromptResponse extends ChannelTestResponse {
+  reply?: string
+  raw_body?: string
+}
+
 export interface ChannelBalanceResponse {
   success: boolean
   message?: string

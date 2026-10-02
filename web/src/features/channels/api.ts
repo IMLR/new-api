@@ -26,6 +26,7 @@ import type {
   ChannelBalanceResponse,
   ChannelOpsResponse,
   ChannelTestResponse,
+  ChannelTestPromptResponse,
   CopyChannelParams,
   CopyChannelResponse,
   FetchModelsResponse,
@@ -385,6 +386,26 @@ export async function testChannel(
   const res = await api.get(
     `/api/channel/test/${id}`,
     channelActionConfig({ params })
+  )
+  return res.data
+}
+
+/**
+ * Test one channel with a custom prompt and read the model reply.
+ */
+export async function testChannelWithPrompt(
+  id: number,
+  payload: {
+    model?: string
+    endpoint_type?: string
+    stream?: boolean
+    prompt: string
+  }
+): Promise<ChannelTestPromptResponse> {
+  const res = await api.post(
+    `/api/channel/test/${id}`,
+    payload,
+    channelActionConfig({ timeout: 120000 })
   )
   return res.data
 }

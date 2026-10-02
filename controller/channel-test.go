@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
@@ -41,6 +43,26 @@ type testResult struct {
 	context      *gin.Context
 	localErr     error
 	newAPIError  *types.NewAPIError
+}
+
+// resolveTestModel applies the channel defaults when the caller leaves the
+// model empty: the saved test model first, then the first enabled model.
+func resolveTestModel(channel *model.Channel, testModel string) string {
+	testModel = strings.TrimSpace(testModel)
+	if testModel != "" || channel == nil {
+		return testModel
+	}
+	if channel.TestModel != nil {
+		if saved := strings.TrimSpace(*channel.TestModel); saved != "" {
+			return saved
+		}
+	}
+	if models := channel.GetModels(); len(models) > 0 {
+		if first := strings.TrimSpace(models[0]); first != "" {
+			return first
+		}
+	}
+	return "gpt-4o-mini"
 }
 
 func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointType string) string {
@@ -124,20 +146,7 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
 
-	testModel = strings.TrimSpace(testModel)
-	if testModel == "" {
-		if channel.TestModel != nil && *channel.TestModel != "" {
-			testModel = strings.TrimSpace(*channel.TestModel)
-		} else {
-			models := channel.GetModels()
-			if len(models) > 0 {
-				testModel = strings.TrimSpace(models[0])
-			}
-			if testModel == "" {
-				testModel = "gpt-4o-mini"
-			}
-		}
-	}
+	testModel = resolveTestModel(channel, testModel)
 
 	endpointType = normalizeChannelTestEndpoint(channel, testModel, endpointType)
 
@@ -946,6 +955,175 @@ func TestChannel(c *gin.Context) {
 		"message": "",
 		"time":    consumedTime,
 	})
+}
+
+// maxPromptTestRunes bounds the prompt a channel page may send to one model.
+const maxPromptTestRunes = 4000
+
+// TestChannelWithPrompt runs one channel test with an operator supplied prompt
+// and answers with the model reply, so the channel page can try a real message
+// without leaving the test dialog.
+func TestChannelWithPrompt(c *gin.Context) {
+	channelId, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	var input struct {
+		Model        string `json:"model"`
+		EndpointType string `json:"endpoint_type"`
+		Stream       bool   `json:"stream"`
+		Prompt       string `json:"prompt"`
+	}
+	if err = c.ShouldBindJSON(&input); err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	prompt := strings.TrimSpace(input.Prompt)
+	if prompt == "" {
+		common.ApiError(c, fmt.Errorf("prompt is required"))
+		return
+	}
+	if utf8.RuneCountInString(prompt) > maxPromptTestRunes {
+		common.ApiError(c, fmt.Errorf("prompt is limited to %d characters", maxPromptTestRunes))
+		return
+	}
+	channel, err := model.CacheGetChannel(channelId)
+	if err != nil {
+		channel, err = model.GetChannelById(channelId, true)
+		if err != nil {
+			common.ApiError(c, err)
+			return
+		}
+	}
+	testUserID, err := resolveChannelTestUserID(c)
+	if err != nil {
+		common.ApiError(c, err)
+		return
+	}
+	testModel := resolveTestModel(channel, input.Model)
+	endpointType := normalizeChannelTestEndpoint(channel, testModel, input.EndpointType)
+
+	tik := time.Now()
+	requestCtx := context.Background()
+	if c.Request != nil {
+		requestCtx = c.Request.Context()
+	}
+	result := testChannelWithPrompt(requestCtx, channel, testUserID, testModel, input.EndpointType, input.Stream, prompt)
+	milliseconds := time.Since(tik).Milliseconds()
+	consumedTime := float64(milliseconds) / 1000.0
+	if result.localErr != nil {
+		resp := gin.H{
+			"success": false,
+			"message": result.localErr.Error(),
+			"time":    0.0,
+		}
+		if result.newAPIError != nil {
+			resp["error_code"] = result.newAPIError.GetErrorCode()
+		}
+		c.JSON(http.StatusOK, resp)
+		return
+	}
+	if result.newAPIError != nil {
+		c.JSON(http.StatusOK, gin.H{
+			"success":    false,
+			"message":    result.newAPIError.Error(),
+			"time":       consumedTime,
+			"error_code": result.newAPIError.GetErrorCode(),
+		})
+		return
+	}
+	go channel.UpdateResponseTime(milliseconds)
+	reply := extractTestReply(result.responseBody, input.Stream, endpointType)
+	resp := gin.H{
+		"success": true,
+		"message": "",
+		"time":    consumedTime,
+		"reply":   reply,
+	}
+	if reply == "" && len(result.responseBody) > 0 {
+		resp["raw_body"] = common.LocalLogPreview(string(result.responseBody))
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
+// extractTestReply reads the assistant text from the client facing body the
+// relay wrote during a test. The endpoint type decides which field carries the
+// answer; a shape the extraction does not know returns an empty string and the
+// caller falls back to the raw body.
+func extractTestReply(body []byte, isStream bool, endpointType string) string {
+	trimmed := bytes.TrimSpace(body)
+	if len(trimmed) == 0 {
+		return ""
+	}
+	if isStream {
+		return extractStreamTestReply(trimmed, endpointType)
+	}
+	return extractJSONTestReply(trimmed, endpointType)
+}
+
+func extractJSONTestReply(body []byte, endpointType string) string {
+	switch constant.EndpointType(endpointType) {
+	case constant.EndpointTypeAnthropic:
+		return collectTestText(gjson.GetBytes(body, "content.#.text"))
+	case constant.EndpointTypeGemini:
+		return collectTestText(gjson.GetBytes(body, "candidates.0.content.parts.#.text"))
+	case constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAIResponseCompact:
+		return collectTestText(gjson.GetBytes(body, "output.#.content.#.text"))
+	default:
+		return collectTestText(gjson.GetBytes(body, "choices.0.message.content"))
+	}
+}
+
+func extractStreamTestReply(body []byte, endpointType string) string {
+	var reply strings.Builder
+	scanner := bufio.NewScanner(bytes.NewReader(body))
+	scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data:") {
+			continue
+		}
+		payload := strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		if payload == "" || payload == "[DONE]" {
+			continue
+		}
+		switch constant.EndpointType(endpointType) {
+		case constant.EndpointTypeAnthropic:
+			reply.WriteString(gjson.Get(payload, "delta.text").String())
+		case constant.EndpointTypeGemini:
+			reply.WriteString(collectTestText(gjson.Get(payload, "candidates.0.content.parts.#.text")))
+		case constant.EndpointTypeOpenAIResponse, constant.EndpointTypeOpenAIResponseCompact:
+			if gjson.Get(payload, "type").String() == "response.output_text.delta" {
+				reply.WriteString(gjson.Get(payload, "delta").String())
+			}
+		default:
+			reply.WriteString(collectTestText(gjson.Get(payload, "choices.0.delta.content")))
+		}
+	}
+	return strings.TrimSpace(reply.String())
+}
+
+// collectTestText joins the text of one gjson value: a plain string is used as
+// is, arrays and objects with a text field are concatenated.
+func collectTestText(value gjson.Result) string {
+	if !value.Exists() {
+		return ""
+	}
+	if value.IsArray() {
+		var text strings.Builder
+		for _, item := range value.Array() {
+			text.WriteString(collectTestText(item))
+		}
+		return text.String()
+	}
+	if value.Type == gjson.String {
+		return value.String()
+	}
+	if text := value.Get("text"); text.Exists() {
+		return collectTestText(text)
+	}
+	return ""
 }
 
 // channelTestSummary records the outcome of one channel test cycle so the

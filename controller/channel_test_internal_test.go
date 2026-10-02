@@ -255,3 +255,87 @@ func TestTestAllChannelsRejectsExistingActiveTask(t *testing.T) {
 	require.Contains(t, recorder.Body.String(), existing.TaskID)
 	require.Contains(t, recorder.Body.String(), "已有通道测试任务正在运行或等待中")
 }
+
+func TestExtractTestReplyAcrossEndpointTypes(t *testing.T) {
+	cases := []struct {
+		name         string
+		endpointType string
+		body         string
+		isStream     bool
+		want         string
+	}{
+		{
+			name:         "chat completion",
+			endpointType: string(constant.EndpointTypeOpenAI),
+			body:         `{"choices":[{"message":{"content":"hello"}}]}`,
+			want:         "hello",
+		},
+		{
+			name:         "chat completion content parts",
+			endpointType: string(constant.EndpointTypeOpenAI),
+			body:         `{"choices":[{"message":{"content":[{"type":"text","text":"he"},{"type":"text","text":"llo"}]}}]}`,
+			want:         "hello",
+		},
+		{
+			name:         "chat completion stream",
+			endpointType: string(constant.EndpointTypeOpenAI),
+			body: "data: {\"choices\":[{\"delta\":{\"content\":\"he\"}}]}\n\n" +
+				"data: {\"choices\":[{\"delta\":{\"content\":\"llo\"}}]}\n\n" +
+				"data: [DONE]\n",
+			isStream: true,
+			want:     "hello",
+		},
+		{
+			name:         "claude messages",
+			endpointType: string(constant.EndpointTypeAnthropic),
+			body:         `{"content":[{"type":"thinking","thinking":"hidden"},{"type":"text","text":"hello"}]}`,
+			want:         "hello",
+		},
+		{
+			name:         "claude stream",
+			endpointType: string(constant.EndpointTypeAnthropic),
+			body: "data: {\"type\":\"message_start\",\"message\":{}}\n\n" +
+				"data: {\"type\":\"content_block_delta\",\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}\n\n",
+			isStream: true,
+			want:     "hello",
+		},
+		{
+			name:         "openai responses",
+			endpointType: string(constant.EndpointTypeOpenAIResponse),
+			body:         `{"output":[{"type":"reasoning","content":[]},{"type":"message","content":[{"type":"output_text","text":"hello"}]}]}`,
+			want:         "hello",
+		},
+		{
+			name:         "openai responses stream",
+			endpointType: string(constant.EndpointTypeOpenAIResponse),
+			body: "data: {\"type\":\"response.output_text.delta\",\"delta\":\"hello\"}\n\n" +
+				"data: {\"type\":\"response.function_call_arguments.delta\",\"delta\":\"{\\\"command\\\":\\\"ls\\\"}\"}\n\n",
+			isStream: true,
+			want:     "hello",
+		},
+		{
+			name:         "gemini",
+			endpointType: string(constant.EndpointTypeGemini),
+			body:         `{"candidates":[{"content":{"parts":[{"text":"hello"}]}}]}`,
+			want:         "hello",
+		},
+		{
+			name:         "gemini stream",
+			endpointType: string(constant.EndpointTypeGemini),
+			body:         "data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"hello\"}]}}]}\n\n",
+			isStream:     true,
+			want:         "hello",
+		},
+		{
+			name:         "empty body",
+			endpointType: string(constant.EndpointTypeOpenAI),
+			body:         "",
+			want:         "",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, tc.want, extractTestReply([]byte(tc.body), tc.isStream, tc.endpointType))
+		})
+	}
+}

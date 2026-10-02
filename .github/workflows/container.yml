@@ -42,7 +42,7 @@ jobs:
         run: bun test src/lib/handle-server-error.test.ts src/features/channels/lib/__tests__/channel-detection-settings.test.ts src/features/channels/components/__tests__/channel-detection-settings.test.tsx src/features/channels/components/__tests__/channel-fingerprint-button.test.tsx
       - name: Go regression tests
         if: ${{ !cancelled() }}
-        run: go test ./pkg/modelfingerprint ./controller ./model ./service ./router -run 'Test(RankMatchesFrozen|RefusalDoesNot|NumbersSelect|Fingerprint|ChannelTestUsesSaved|ChannelEndpointPreference)' -count=1
+        run: go test ./pkg/modelfingerprint ./controller ./model ./service ./router -run 'Test(RankMatchesFrozen|RefusalDoesNot|NumbersSelect|Fingerprint|ChannelTestUsesSaved|ChannelEndpointPreference|ExtractTestReply|ResponsesPolicySkips|ChannelTestEndpointSkips)' -count=1
   build:
     needs: verify
     name: Build multi-platform image

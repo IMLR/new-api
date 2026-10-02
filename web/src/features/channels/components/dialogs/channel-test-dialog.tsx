@@ -25,10 +25,12 @@ import type {
 import {
   Check,
   CheckCircle2,
+  ChevronDown,
   Copy,
   Gauge,
   Info,
   Loader2,
+  Send,
   Settings,
   Trash2,
 } from 'lucide-react'
@@ -60,6 +62,11 @@ import {
 import { StatusBadge } from '@/components/status-badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -79,6 +86,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Switch } from '@/components/ui/switch'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Tooltip,
   TooltipContent,
@@ -87,7 +95,7 @@ import {
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard'
 import { useIsMobile } from '@/hooks/use-mobile'
 
-import { updateChannel } from '../../api'
+import { testChannelWithPrompt, updateChannel } from '../../api'
 import {
   channelsQueryKeys,
   formatResponseTime,
@@ -122,6 +130,13 @@ type TestResult = {
   completedAt?: number
   error?: string
   errorCode?: string
+}
+
+type PromptTestResult = {
+  reply?: string
+  rawBody?: string
+  error?: string
+  responseTime?: number
 }
 
 type BatchProgress = {
@@ -363,6 +378,12 @@ function ChannelTestDialogContent({
     pageIndex: 0,
     pageSize: 30,
   })
+  const [isPromptTestOpen, setIsPromptTestOpen] = useState(false)
+  const [promptTestModel, setPromptTestModel] = useState('')
+  const [promptText, setPromptText] = useState('')
+  const [isPromptSending, setIsPromptSending] = useState(false)
+  const [promptTestResult, setPromptTestResult] =
+    useState<PromptTestResult | null>(null)
   const endpointSelectItems = useMemo(
     () =>
       endpointTypeOptions.map((option) => ({
@@ -421,6 +442,11 @@ function ChannelTestDialogContent({
     setIsDeletingFailed(false)
     setFailureDetails(null)
     setPagination({ pageIndex: 0, pageSize: 30 })
+    setIsPromptTestOpen(false)
+    setPromptTestModel('')
+    setPromptText('')
+    setIsPromptSending(false)
+    setPromptTestResult(null)
   }, [])
 
   const streamDisabled = STREAM_INCOMPATIBLE_ENDPOINTS.has(endpointType)
@@ -614,6 +640,56 @@ function ChannelTestDialogContent({
       updateTestResult,
     ]
   )
+
+  const promptTestModelValue =
+    promptTestModel || defaultTestModel || models[0] || ''
+
+  const handlePromptTestModelChange = useCallback((value: string | null) => {
+    if (value === null) return
+
+    setPromptTestModel(value)
+  }, [])
+
+  const handlePromptTest = useCallback(async () => {
+    const prompt = promptText.trim()
+    if (!prompt || !currentRow) return
+
+    setIsPromptSending(true)
+    setPromptTestResult(null)
+    try {
+      const response = await testChannelWithPrompt(currentRow.id, {
+        model: promptTestModelValue || undefined,
+        endpoint_type: endpointType === 'auto' ? undefined : endpointType,
+        stream: effectiveStreamTest || undefined,
+        prompt,
+      })
+      if (response.success) {
+        setPromptTestResult({
+          reply: response.reply,
+          rawBody: response.raw_body,
+          responseTime: response.time,
+        })
+      } else {
+        setPromptTestResult({
+          error: response.message || t('Test failed'),
+          responseTime: response.time,
+        })
+      }
+    } catch (error: unknown) {
+      setPromptTestResult({
+        error: error instanceof Error ? error.message : t('Test failed'),
+      })
+    } finally {
+      setIsPromptSending(false)
+    }
+  }, [
+    currentRow,
+    effectiveStreamTest,
+    endpointType,
+    promptTestModelValue,
+    promptText,
+    t,
+  ])
 
   const handleStopBatchTest = useCallback(() => {
     if (!isBatchTesting || isBatchStopRequested) return
@@ -1069,6 +1145,116 @@ function ChannelTestDialogContent({
               </p>
             </div>
           </div>
+
+          <Collapsible
+            open={isPromptTestOpen}
+            onOpenChange={setIsPromptTestOpen}
+            className='rounded-lg border'
+          >
+            <CollapsibleTrigger className='hover:bg-muted/50 flex w-full items-center justify-between gap-3 rounded-lg p-3 text-left'>
+              <span className='flex items-center gap-2'>
+                <ChevronDown className='size-4' />
+                <span className='text-sm font-medium'>
+                  {t('Custom prompt test')}
+                </span>
+              </span>
+              <span className='text-muted-foreground hidden text-xs sm:block'>
+                {t('Send your own message to the model and read the reply.')}
+              </span>
+            </CollapsibleTrigger>
+            <CollapsibleContent className='space-y-3 px-3 pb-3'>
+              <div className='grid gap-2'>
+                <Label htmlFor='prompt-test-model'>{t('Model')}</Label>
+                <Select
+                  items={models.map((model) => ({
+                    value: model,
+                    label: model,
+                  }))}
+                  value={promptTestModelValue}
+                  onValueChange={handlePromptTestModelChange}
+                >
+                  <SelectTrigger
+                    id='prompt-test-model'
+                    className='w-full min-w-0'
+                  >
+                    <SelectValue
+                      className='min-w-0 truncate'
+                      placeholder={t('Select a model')}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {models.map((model) => (
+                        <SelectItem
+                          key={model}
+                          value={model}
+                          className='min-w-0 leading-snug break-words whitespace-normal'
+                        >
+                          {model}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className='grid gap-2'>
+                <Label htmlFor='prompt-test-input'>{t('Prompt')}</Label>
+                <Textarea
+                  id='prompt-test-input'
+                  rows={3}
+                  value={promptText}
+                  onChange={(event) => setPromptText(event.target.value)}
+                  placeholder={t('Type a message to send to the model')}
+                />
+              </div>
+              <Button
+                size='sm'
+                onClick={handlePromptTest}
+                disabled={isPromptSending || !promptText.trim()}
+              >
+                {isPromptSending ? (
+                  <Loader2 data-icon='inline-start' className='animate-spin' />
+                ) : (
+                  <Send data-icon='inline-start' />
+                )}
+                {isPromptSending ? t('Sending...') : t('Send')}
+              </Button>
+              {promptTestResult && (
+                <div className='rounded-md border p-3 text-sm'>
+                  {promptTestResult.error ? (
+                    <p className='text-destructive break-words'>
+                      {promptTestResult.error}
+                    </p>
+                  ) : (
+                    <div className='space-y-2'>
+                      <p className='text-muted-foreground text-xs'>
+                        {t('Model reply')}
+                        {promptTestResult.responseTime !== undefined &&
+                          ` · ${formatResponseTime(
+                            promptTestResult.responseTime * 1000,
+                            t
+                          )}`}
+                      </p>
+                      <p className='break-words whitespace-pre-wrap'>
+                        {promptTestResult.reply ||
+                          t('The channel returned no reply text.')}
+                      </p>
+                      {promptTestResult.rawBody && (
+                        <details className='text-muted-foreground text-xs'>
+                          <summary className='cursor-pointer'>
+                            {t('Raw response')}
+                          </summary>
+                          <pre className='mt-2 max-h-48 overflow-auto break-all whitespace-pre-wrap'>
+                            {promptTestResult.rawBody}
+                          </pre>
+                        </details>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CollapsibleContent>
+          </Collapsible>
 
           <div className='space-y-3 max-sm:has-[div[role="toolbar"]]:pb-16'>
             <div className='flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between'>
