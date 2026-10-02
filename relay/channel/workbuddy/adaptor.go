@@ -14,17 +14,40 @@ import (
 	"sync"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/QuantumNous/new-api/dto"
 	workbuddyapi "github.com/QuantumNous/new-api/pkg/workbuddy"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/openai"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/service"
+	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
+	"github.com/pkg/errors"
 )
 
 const ChannelName = "workbuddy"
+
+// imageGenerationPath serves the media generation models. Video models are
+// relayed by the async task adaptor instead; this path covers text-to-image and
+// image-to-image.
+const imageGenerationPath = "/v2/images/generations"
+
+// isImageRelayMode reports the relay modes the image endpoint serves.
+func isImageRelayMode(mode int) bool {
+	return mode == relayconstant.RelayModeImagesGenerations || mode == relayconstant.RelayModeImagesEdits
+}
+
+// workBuddyImageRequest is the upstream media payload. size and quality are
+// accepted and change the billed credit amount.
+type workBuddyImageRequest struct {
+	Model   string `json:"model"`
+	Prompt  string `json:"prompt"`
+	Size    string `json:"size,omitempty"`
+	Quality string `json:"quality,omitempty"`
+	Image   string `json:"image,omitempty"`
+}
 
 // Adaptor relays through the shared OpenAI handler, which already understands
 // the streaming and non-streaming answer shapes.
@@ -45,6 +68,9 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	if info == nil {
 		return "", fmt.Errorf("missing relay info")
 	}
+	if isImageRelayMode(info.RelayMode) {
+		return strings.TrimRight(a.imageBase(info), "/") + imageGenerationPath, nil
+	}
 	if err := unsupportedRelayMode(info.RelayMode); err != nil {
 		return "", err
 	}
@@ -58,6 +84,74 @@ func (a *Adaptor) GetRequestURL(info *relaycommon.RelayInfo) (string, error) {
 	return strings.TrimRight(base, "/") + workbuddyapi.ChatCompletionsPath, nil
 }
 
+// imageBase resolves the host for media calls with the same rule as chat.
+func (a *Adaptor) imageBase(info *relaycommon.RelayInfo) string {
+	if a.base != "" {
+		return a.base
+	}
+	if info != nil {
+		if base := strings.TrimRight(strings.TrimSpace(info.ChannelBaseUrl), "/"); base != "" && base != workbuddyapi.ChatBaseCN {
+			return base
+		}
+	}
+	if a.credential != nil {
+		return a.credential.ChatBase()
+	}
+	return workbuddyapi.ChatBaseCN
+}
+
+// ConvertImageRequest maps the OpenAI image request onto the media payload.
+func (a *Adaptor) ConvertImageRequest(c *gin.Context, info *relaycommon.RelayInfo, request dto.ImageRequest) (any, error) {
+	if request.Prompt == "" {
+		return nil, fmt.Errorf("prompt is required")
+	}
+	if uploadedFile(c) {
+		return nil, fmt.Errorf("WorkBuddy image editing takes the reference image as an image field with a URL; file uploads are not supported")
+	}
+	if info != nil && info.IsModelMapped {
+		request.Model = info.UpstreamModelName
+	} else if info != nil {
+		info.UpstreamModelName = request.Model
+	}
+	return workBuddyImageRequest{
+		Model:   request.Model,
+		Prompt:  request.Prompt,
+		Size:    strings.TrimSpace(request.Size),
+		Quality: strings.TrimSpace(request.Quality),
+		Image:   imageReference(request),
+	}, nil
+}
+
+// uploadedFile reports a multipart edit that carries the image as a file. The
+// upstream takes a URL, so such a request cannot be forwarded as is.
+func uploadedFile(c *gin.Context) bool {
+	if c == nil || c.Request == nil {
+		return false
+	}
+	if !strings.Contains(c.Request.Header.Get("Content-Type"), "multipart/form-data") {
+		return false
+	}
+	form := c.Request.MultipartForm
+	return form != nil && len(form.File) > 0
+}
+
+// imageReference reads the reference image of an image-to-image request. The
+// upstream takes one url; the field accepts a plain string or a one item array.
+func imageReference(request dto.ImageRequest) string {
+	if len(request.Image) == 0 {
+		return ""
+	}
+	var single string
+	if common.Unmarshal(request.Image, &single) == nil {
+		return strings.TrimSpace(single)
+	}
+	var many []string
+	if common.Unmarshal(request.Image, &many) == nil && len(many) > 0 {
+		return strings.TrimSpace(many[0])
+	}
+	return ""
+}
+
 func (a *Adaptor) SetupRequestHeader(c *gin.Context, header *http.Header, info *relaycommon.RelayInfo) error {
 	channel.SetupApiRequestHeader(info, c, header)
 	if a.credential == nil {
@@ -68,6 +162,13 @@ func (a *Adaptor) SetupRequestHeader(c *gin.Context, header *http.Header, info *
 }
 
 func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io.Reader) (any, error) {
+	if isImageRelayMode(info.RelayMode) {
+		raw, err := io.ReadAll(body)
+		if err != nil {
+			return nil, err
+		}
+		return a.doImageRequest(c, info, raw)
+	}
 	if err := unsupportedRelayMode(info.RelayMode); err != nil {
 		return nil, err
 	}
@@ -125,6 +226,131 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 	}
 	resp.Body = a.streamBody(c, info, prepared, resp.Body)
 	resp.Header.Set("Content-Type", "text/event-stream")
+	return resp, nil
+}
+
+// DoResponse renders one upstream answer. Media requests get their envelope
+// translated into the OpenAI image shape first; chat requests keep the shared
+// handler.
+func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycommon.RelayInfo) (usage any, err *types.NewAPIError) {
+	if isImageRelayMode(info.RelayMode) {
+		translated, imageErr := translateImageResponse(resp)
+		if imageErr != nil {
+			return nil, imageErr
+		}
+		return openai.OpenaiImageHandler(c, info, translated)
+	}
+	return a.Adaptor.DoResponse(c, resp, info)
+}
+
+// imageEnvelope mirrors the media generation answer.
+type imageEnvelope struct {
+	Code int    `json:"code"`
+	Msg  string `json:"msg"`
+	Data struct {
+		Created      int64  `json:"created"`
+		Size         string `json:"size"`
+		Quality      string `json:"quality"`
+		OutputFormat string `json:"output_format"`
+		Background   string `json:"background"`
+		Data         []struct {
+			URL           string `json:"url"`
+			RevisedPrompt string `json:"revised_prompt"`
+		} `json:"data"`
+		Usage struct {
+			TotalTokens int     `json:"total_tokens"`
+			Credit      float64 `json:"credit"`
+		} `json:"usage"`
+	} `json:"data"`
+}
+
+// translateImageResponse converts the media envelope into the OpenAI image
+// answer the shared handler renders, so the client sees the usual shape.
+func translateImageResponse(resp *http.Response) (*http.Response, *types.NewAPIError) {
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	resp.Body.Close()
+	if err != nil {
+		return nil, types.NewOpenAIError(err, types.ErrorCodeReadResponseBodyFailed, http.StatusInternalServerError)
+	}
+	var parsed imageEnvelope
+	if err := common.Unmarshal(raw, &parsed); err != nil {
+		return nil, types.NewOpenAIError(
+			errors.Wrapf(err, "body: %s", common.LocalLogPreview(string(raw))),
+			types.ErrorCodeBadResponseBody,
+			http.StatusInternalServerError,
+		)
+	}
+	if parsed.Code != 0 {
+		return nil, types.WithOpenAIError(types.OpenAIError{
+			Message: fmt.Sprintf("code=%d msg=%s", parsed.Code, parsed.Msg),
+			Type:    "workbuddy_upstream_error",
+		}, resp.StatusCode)
+	}
+	images := make([]map[string]any, 0, len(parsed.Data.Data))
+	for _, item := range parsed.Data.Data {
+		entry := map[string]any{"url": item.URL}
+		if item.RevisedPrompt != "" {
+			entry["revised_prompt"] = item.RevisedPrompt
+		}
+		images = append(images, entry)
+	}
+	body := map[string]any{
+		"created": parsed.Data.Created,
+		"data":    images,
+	}
+	if parsed.Data.Usage.TotalTokens > 0 {
+		body["usage"] = map[string]any{
+			"output_tokens": parsed.Data.Usage.TotalTokens,
+			"total_tokens":  parsed.Data.Usage.TotalTokens,
+		}
+	}
+	encoded, err := common.Marshal(body)
+	if err != nil {
+		return nil, types.NewOpenAIError(err, types.ErrorCodeBadResponseBody, http.StatusInternalServerError)
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(encoded))
+	resp.ContentLength = int64(len(encoded))
+	resp.Header.Set("Content-Type", "application/json")
+	resp.Header.Del("Content-Length")
+	resp.Header.Del("Transfer-Encoding")
+	return resp, nil
+}
+
+// doImageRequest sends one media generation request and returns the raw answer.
+func (a *Adaptor) doImageRequest(c *gin.Context, info *relaycommon.RelayInfo, raw []byte) (*http.Response, error) {
+	credential, err := service.ResolveWorkBuddyCredential(c.Request.Context(), info.ChannelId, "")
+	if err != nil {
+		return nil, err
+	}
+	a.credential = credential
+	a.base = channelBase(info, credential)
+	send := func() (*http.Response, error) {
+		url := strings.TrimRight(a.imageBase(info), "/") + imageGenerationPath
+		request, err := http.NewRequestWithContext(c.Request.Context(), http.MethodPost, url, bytes.NewReader(raw))
+		if err != nil {
+			return nil, err
+		}
+		workbuddyapi.MediaHeaders(request.Header, a.credential)
+		client, err := upstreamClient(info.ChannelSetting.Proxy)
+		if err != nil {
+			return nil, err
+		}
+		return client.Do(request)
+	}
+	resp, err := send()
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode == http.StatusUnauthorized {
+		resp.Body.Close()
+		refreshed, refreshErr := service.ResolveWorkBuddyCredential(c.Request.Context(), info.ChannelId, credential.AccessToken)
+		if refreshErr != nil {
+			return nil, refreshErr
+		}
+		a.credential = refreshed
+		a.base = channelBase(info, refreshed)
+		return send()
+	}
 	return resp, nil
 }
 
@@ -374,7 +600,9 @@ func rewriteError(resp *http.Response) (*http.Response, error) {
 	if strings.Contains(message, "Backend [mps] is not supported") {
 		// The media models sit in the same catalog as the chat models; the
 		// video task endpoint serves them.
-		message += "; this model generates media, send it to /v1/video/generations (or /v1/videos) instead"
+		message += "; this model generates video, send it to /v1/video/generations (or /v1/videos) instead"
+	} else if strings.Contains(message, "Backend [maas] is not supported") {
+		message += "; this model generates images, send it to /v1/images/generations instead"
 	}
 	return errorResponse(resp, resp.StatusCode, message, envelope.Code), nil
 }

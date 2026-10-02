@@ -1,7 +1,9 @@
 package workbuddy
 
 import (
+	"encoding/json"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/dto"
 	workbuddyapi "github.com/QuantumNous/new-api/pkg/workbuddy"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
@@ -75,6 +78,83 @@ func TestGetRequestURLRejectsUnsupportedModes(t *testing.T) {
 	assert.Contains(t, err.Error(), "compact")
 }
 
+func TestGetRequestURLUsesMediaPathForImages(t *testing.T) {
+	adaptor := &Adaptor{base: workbuddyapi.GlobalBase}
+	for _, mode := range []int{relayconstant.RelayModeImagesGenerations, relayconstant.RelayModeImagesEdits} {
+		info := &relaycommon.RelayInfo{
+			RelayMode:   mode,
+			ChannelMeta: &relaycommon.ChannelMeta{},
+		}
+		url, err := adaptor.GetRequestURL(info)
+		require.NoError(t, err, "mode %d", mode)
+		assert.Equal(t, workbuddyapi.GlobalBase+"/v2/images/generations", url)
+	}
+}
+
+func TestConvertImageRequestBuildsMediaPayload(t *testing.T) {
+	adaptor := &Adaptor{}
+	info := &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{}}
+	converted, err := adaptor.ConvertImageRequest(nil, info, dto.ImageRequest{
+		Model:   "gpt-image-2.5-sunburst",
+		Prompt:  "a red ball",
+		Size:    "1024x1024",
+		Quality: "high",
+		Image:   json.RawMessage(`["https://cdn.example/first.png","https://cdn.example/second.png"]`),
+	})
+	require.NoError(t, err)
+	payload, ok := converted.(workBuddyImageRequest)
+	require.True(t, ok)
+	assert.Equal(t, "gpt-image-2.5-sunburst", payload.Model)
+	assert.Equal(t, "a red ball", payload.Prompt)
+	assert.Equal(t, "1024x1024", payload.Size)
+	assert.Equal(t, "high", payload.Quality)
+	assert.Equal(t, "https://cdn.example/first.png", payload.Image)
+	assert.Equal(t, "gpt-image-2.5-sunburst", info.UpstreamModelName)
+}
+
+func TestConvertImageRequestRejectsUploadedEdit(t *testing.T) {
+	context := testContext(t, map[string]string{"Content-Type": "multipart/form-data; boundary=x"})
+	context.Request.MultipartForm = &multipart.Form{
+		File: map[string][]*multipart.FileHeader{"image": {{}}},
+	}
+	adaptor := &Adaptor{}
+	_, err := adaptor.ConvertImageRequest(context, &relaycommon.RelayInfo{ChannelMeta: &relaycommon.ChannelMeta{}}, dto.ImageRequest{
+		Model:  "gpt-image-2.5-sunburst",
+		Prompt: "edit this",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "file uploads are not supported")
+}
+
+func TestTranslateImageResponseBuildsOpenAIShape(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{},
+		Body: io.NopCloser(strings.NewReader(`{"code":0,"msg":"OK","data":{
+			"created":1790945010,"size":"1312x1199","quality":"low","output_format":"png",
+			"data":[{"url":"https://cdn.example/image.png"}],
+			"usage":{"total_tokens":4366,"credit":0.6}}}`)),
+	}
+	translated, apiErr := translateImageResponse(resp)
+	require.Nil(t, apiErr)
+	raw, err := io.ReadAll(translated.Body)
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"created":1790945010,"data":[{"url":"https://cdn.example/image.png"}],
+		"usage":{"output_tokens":4366,"total_tokens":4366}}`, string(raw))
+}
+
+func TestTranslateImageResponseReportsUpstreamError(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header:     http.Header{},
+		Body: io.NopCloser(strings.NewReader(
+			`{"code":14401,"msg":"Create image failed with error: Image model [nope] route config not found"}`)),
+	}
+	_, apiErr := translateImageResponse(resp)
+	require.NotNil(t, apiErr)
+	assert.Contains(t, apiErr.Error(), "14401")
+}
+
 func TestChatMetaPrefersClientSession(t *testing.T) {
 	context := testContext(t, map[string]string{"X-Session-Id": "sess-42", "X-Forwarded-For": "203.0.113.9, 10.0.0.1"})
 	info := &relaycommon.RelayInfo{
@@ -129,6 +209,25 @@ func TestRewriteErrorTurnsEnvelopeIntoOpenAIError(t *testing.T) {
 	assert.Equal(t, "code=11102 msg=model unavailable", message)
 	assert.EqualValues(t, 11102, payload["error"].(map[string]any)["code"])
 	assert.Equal(t, http.StatusBadRequest, rewritten.StatusCode)
+}
+
+func TestRewriteErrorNamesTheMediaEndpoint(t *testing.T) {
+	cases := map[string]string{
+		`{"code":11103,"msg":"Backend [mps] is not supported"}`:  "/v1/video/generations",
+		`{"code":11103,"msg":"Backend [maas] is not supported"}`: "/v1/images/generations",
+	}
+	for body, want := range cases {
+		response := &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Body:       io.NopCloser(strings.NewReader(body)),
+			Header:     http.Header{},
+		}
+		rewritten, err := rewriteError(response)
+		require.NoError(t, err)
+		raw, err := io.ReadAll(rewritten.Body)
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), want)
+	}
 }
 
 func TestErrorResponseReplacesStatusAndBody(t *testing.T) {

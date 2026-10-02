@@ -77,6 +77,11 @@ func normalizeChannelTestEndpoint(channel *model.Channel, modelName, endpointTyp
 		if endpoint := channel.GetSetting().ModelEndpoints[modelName]; endpoint != "" {
 			return endpoint
 		}
+		if common.IsImageGenerationModel(modelName) {
+			// The image models answer only on the image endpoint; testing them
+			// as chat would report the upstream's "not supported" error.
+			return string(constant.EndpointTypeImageGeneration)
+		}
 		if service.ShouldChannelUseResponses(channel.GetSetting(), channel.Id, channel.Type, modelName) {
 			return string(constant.EndpointTypeOpenAIResponse)
 		}

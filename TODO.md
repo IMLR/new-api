@@ -5,6 +5,13 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-10-02: Added WorkBuddy image generation. Image catalog entries stay in
+  the channel model list and relay through `POST /v1/images/generations`; the
+  adaptor calls the gateway's `/v2/images/generations` endpoint, translates the
+  upstream envelope into the OpenAI image shape, reuses the account credential
+  with a 401 refresh retry, and rejects multipart file edits because the
+  upstream takes a reference image URL. `gpt-image-*` ids are recognized as
+  image models and channel tests route them to the image endpoint.
 - 2026-10-02: Unified Cline daily-cap and rate-limit cooldowns, including
   `Retry after` messages and `Retry-After` headers. Model requests exhaust
   distinct eligible channels across priority layers and permitted auto groups;

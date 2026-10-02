@@ -324,17 +324,13 @@ func mergeModels(primary, secondary []ModelInfo) []ModelInfo {
 	return out
 }
 
-// imageGenerationTags mark the catalog entries that generate images. They carry
-// no token limits and the chat endpoint answers them with code 11103 ("Backend
-// [mps] is not supported"), so they never belong to the chat catalog. Video
-// entries stay: the video task endpoint serves them.
-var imageGenerationTags = []string{
-	"text-to-image",
-	"image-to-image",
-}
-
 // nonChatModel filters the entries that are not conversational models:
-// completion and embedding endpoints, tiny output models and media generators.
+// completion and embedding endpoints and tiny output models.
+//
+// Media entries (image and video generators) stay in the catalog: the relay
+// serves them on the media and video endpoints, and the client needs the ids to
+// call those. The chat endpoint answers them with code 11103 ("Backend [mps] is
+// not supported"), so the relay points the caller at the right endpoint.
 func nonChatModel(entry catalogEntry) bool {
 	id := strings.ToLower(strings.TrimSpace(entry.ID))
 	for _, prefix := range []string{"nes-", "completion-", "codewise-"} {
@@ -344,13 +340,6 @@ func nonChatModel(entry catalogEntry) bool {
 	}
 	if entry.MaxOutputTokens > 0 && entry.MaxOutputTokens <= 256 {
 		return true
-	}
-	for _, tag := range entry.Tags {
-		for _, generation := range imageGenerationTags {
-			if tag == generation {
-				return true
-			}
-		}
 	}
 	return false
 }

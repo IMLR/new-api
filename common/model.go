@@ -12,7 +12,8 @@ var (
 	ImageGenerationModels = []string{
 		"dall-e-3",
 		"dall-e-2",
-		"gpt-image-1",
+		// Covers gpt-image-1 and the newer gpt-image-2.x ids.
+		"prefix:gpt-image-",
 		"prefix:imagen-",
 		"flux-",
 		"flux.1-",

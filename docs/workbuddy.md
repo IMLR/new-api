@@ -134,7 +134,7 @@ WorkBuddy 的聊天请求固定走 HTTP/1.1。上游网关支持 HTTP/2，但半
 | `GET {chatBase}/console/enterprises/personal/models` | 国内版企业端点，按 `agents[cli].models` 过滤 |
 | `GET {chatBase}/v2/enterprises/personal/models` | 国际版企业端点 |
 
-非对话条目会被过滤：`nes-`、`completion-`、`codewise-` 前缀，`maxOutputTokens ≤ 256`，以及 tags 命中图像生成的模型（`text-to-image`、`image-to-image`）。图像条目没有上下文长度与输出上限字段，聊天端点对它们回 `code=11103 Backend [mps] is not supported`，列进渠道只会让用户选中后报错。视频条目保留在目录里，由视频任务接口转发，见下一节。
+非对话条目会被过滤：`nes-`、`completion-`、`codewise-` 前缀，以及 `maxOutputTokens ≤ 256` 的条目。生成类条目（图像与视频）保留在目录里：它们由生图接口与视频任务接口转发，渠道需要这些 id 才能调用。聊天端点对它们回 `code=11103 Backend [mps] is not supported`（图像模型另有一种 `Backend [maas] is not supported`），中转会在这条错误后面补一句，说明该模型应该改用哪个接口。
 
 目录里的 `default-model` / `fast-model` / `balanced-model` / `primary-model` / `deep-model` 是 IDE 的模式别名（展示名 Auto / Fast / Balanced / Primary / Deep），不是具体模型：上游收到别名后自行挑选后端。它们可以正常调用，保留在目录里。
 
@@ -160,7 +160,24 @@ OpenAI Responses 请求体（对话放在 `input` 里）会被上游当成缺少
 
 计费按次：在「模型定价」里给 `seedance-2.5` 配置价格；没有配置价格时按倍率估算的预扣费会明显偏高。任务失败时由轮询统一退款。
 
-模型目录保留视频条目（tags 含 `text-to-video` / `image-to-video`），图像生成条目（`text-to-image` / `image-to-image`）仍然过滤。参考图字段名还没确认（上游对未知字段直接忽略，无法从错误里判断），目前只保证文本生成视频。
+媒体条目（tags 含 `text-to-video` / `image-to-video` / `text-to-image` / `image-to-image`）都保留在目录里，分别由视频任务接口与生图接口转发，见下一节。视频参考图的字段名还没确认（上游对未知字段直接忽略，无法从错误里判断），目前只保证文本生成视频。
+
+## 图像生成
+
+图像模型（`gpt-image-2.5-sunburst`，tags 含 `text-to-image` / `image-to-image`）也发布在同一个目录里，走同一网关的同步 JSON 接口：
+
+| 步骤 | 上游接口 |
+|---|---|
+| 生成 / 编辑 | `POST {chatBase}/v2/images/generations`，请求体 `{"model":"gpt-image-2.5-sunburst","prompt":"...","size":"1024x1024","quality":"low"}` |
+
+响应信封是 `{"code":0,"msg":"OK","data":{"created","size","quality","output_format","data":[{"url"}],"usage":{"total_tokens","credit"}}}`；上游业务码非 0 时按错误返回。中转把它翻译成 OpenAI 图像形状（`created`、`data[].url`、`usage`）后交给下游，所以客户端看到的是常规的 `/v1/images/generations` 结果。
+
+- `POST /v1/images/generations` 生成图像。
+- 图生图在同一条路径上带 URL 形式的参考图（`image` 字段，接受单值或单元素数组）。上游只收 URL，不接受 multipart 文件上传；带文件的编辑请求会被拒绝并说明这一点。
+
+`size` 与 `quality` 可选，直接影响扣费：1024x1024 / low 计 0.54 积分，1536x1024 / high 计 3.78 积分，不带参数时按 1312x1199 / low 计 0.6 积分。空 prompt 或不带参考图的编辑请求会被上游回 `code=14401 ... Input Prompt and ImageUrl is empty`。
+
+国内版（`copilot.tencent.com`）目录里有 `hunyuan-image-alpha` 与 `hunyuan-image-alpha-edit` 两个图像模型，`/v2/images/generations` 端点只在国际版上验证过，这两个模型没有实测。
 
 ## 积分余额
 

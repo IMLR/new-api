@@ -516,22 +516,22 @@ func TestModelsMergesBothCatalogs(t *testing.T) {
 	for _, info := range infos {
 		ids = append(ids, info.ID)
 	}
-	// Video entries stay in the catalog: the video task endpoint serves them.
-	assert.Equal(t, []string{"glm-5.3", "seedance-2.5", "deepseek-v4-flash", "kimi-k3"}, ids)
+	// Media entries stay in the catalog: the image and video endpoints serve them.
+	assert.Equal(t, []string{"glm-5.3", "gpt-image-2.5-sunburst", "seedance-2.5", "deepseek-v4-flash", "kimi-k3", "image-gen"}, ids)
 	assert.Equal(t, int64(200000), infos[0].ContextWindow, "the configuration catalog wins")
-	assert.Equal(t, []string{"high"}, infos[2].Efforts)
+	assert.Equal(t, []string{"high"}, infos[3].Efforts)
 }
 
-func TestNonChatModelFiltersImageEntries(t *testing.T) {
+func TestNonChatModelKeepsMediaEntries(t *testing.T) {
 	cases := []struct {
 		id        string
 		tags      []string
 		maxOutput int64
 		want      bool
 	}{
-		{id: "gpt-image-2.5-sunburst", tags: []string{"text-to-image", "image-to-image"}, want: true},
-		{id: "hunyuan-image-alpha-edit", tags: []string{"image-to-image"}, want: true},
-		// 视频条目保留在目录里，由视频任务接口转发。
+		// 媒体条目保留在目录里，由生图接口与视频任务接口转发。
+		{id: "gpt-image-2.5-sunburst", tags: []string{"text-to-image", "image-to-image"}, want: false},
+		{id: "hunyuan-image-alpha-edit", tags: []string{"image-to-image"}, want: false},
 		{id: "seedance-2.5", tags: []string{"text-to-video", "image-to-video"}, want: false},
 		{id: "fast-model", want: false},
 		{id: "hy4-preview-f", tags: []string{"craft"}, want: false},
