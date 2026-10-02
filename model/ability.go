@@ -149,9 +149,8 @@ func filterAbilitiesByRequestPathAndModel(abilities []Ability, requestPath strin
 }
 
 // filterUnavailableAbilities applies the per-model quota cooldown and the
-// channels already tried by the current request to the DB selection path. The
-// original list is kept when everything is filtered out, so the caller still
-// reports the upstream error instead of a missing channel.
+// channels already tried by the current request to the DB selection path.
+// An empty result ends selection instead of retrying an unavailable account.
 func filterUnavailableAbilities(abilities []Ability, model string, usedChannelIds []int) []Ability {
 	if len(abilities) == 0 {
 		return abilities
@@ -162,9 +161,6 @@ func filterUnavailableAbilities(abilities []Ability, model string, usedChannelId
 		if channelModelAvailable(ability.ChannelId, model, used) {
 			filtered = append(filtered, ability)
 		}
-	}
-	if len(filtered) == 0 {
-		return abilities
 	}
 	return filtered
 }

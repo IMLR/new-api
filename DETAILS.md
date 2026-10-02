@@ -18,7 +18,7 @@
 ## Feature documents
 
 - [`docs/model-matching.md`](./docs/model-matching.md): 模型文字匹配、渠道预览、按渠道/模型持久停用，以及路由与价格配置的关系。
-- [`docs/cline.md`](./docs/cline.md): Cline credential import, independent renewal, subscription-aware model discovery and OpenAI chat relay.
+- [`docs/cline.md`](./docs/cline.md): Cline credential import, independent renewal, subscription-aware model discovery, daily/rate cooldowns and exhaustive model-channel retries.
 
 - [`docs/opencode-go.md`](./docs/opencode-go.md): OpenCode Go credential
   import, public model catalog, per-model endpoint routing, and subscription

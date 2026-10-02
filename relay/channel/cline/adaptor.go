@@ -107,6 +107,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 		if err != nil {
 			var upstreamErr *UpstreamError
 			if errors.As(err, &upstreamErr) {
+				upstreamErr.RetryAfter = resp.Header.Get("Retry-After")
 				a.markQuotaCooldown(c, info, upstreamErr)
 				return upstreamErrorResponse(resp, upstreamErr), nil
 			}
@@ -129,6 +130,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 	}
 	if upstreamErr != nil {
 		resp.Body.Close()
+		upstreamErr.RetryAfter = resp.Header.Get("Retry-After")
 		a.markQuotaCooldown(c, info, upstreamErr)
 		return upstreamErrorResponse(resp, upstreamErr), nil
 	}
@@ -136,8 +138,8 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 	return resp, nil
 }
 
-// markQuotaCooldown records the daily cap window reported by Cline so channel
-// selection skips this account for the affected model until the quota resets.
+// markQuotaCooldown records daily-cap and rate-limit windows so channel
+// selection skips this account's affected model until the reset time.
 func (a *Adaptor) markQuotaCooldown(c *gin.Context, info *relaycommon.RelayInfo, upstreamErr *UpstreamError) {
 	until, ok := upstreamErr.CooldownUntil(time.Now())
 	if !ok || info == nil {
@@ -148,7 +150,7 @@ func (a *Adaptor) markQuotaCooldown(c *gin.Context, info *relaycommon.RelayInfo,
 		model.MarkChannelModelCooldown(info.ChannelId, upstreamModel, until, upstreamErr.Message)
 	}
 	logger.LogInfo(c, fmt.Sprintf(
-		"cline quota cooldown: channel #%d model %s until %s",
+		"cline model cooldown: channel #%d model %s until %s",
 		info.ChannelId, info.OriginModelName, until.Format(time.RFC3339),
 	))
 }

@@ -57,6 +57,10 @@ func MarkChannelModelCooldown(channelId int, modelName string, until time.Time, 
 		delete(channelModelCooldowns.expires, key)
 		return
 	}
+	// Concurrent rate-limit responses must not shorten an existing daily cap.
+	if previous, ok := channelModelCooldowns.expires[key]; ok && previous.until.After(until) {
+		return
+	}
 	channelModelCooldowns.expires[key] = channelModelCooldown{
 		until:      until,
 		reason:     reason,
@@ -133,9 +137,7 @@ func toChannelIdSet(channelIds []int) map[int]struct{} {
 }
 
 // filterUnavailableChannels drops channels that are cooling down for the model
-// or that the current request already tried. When every candidate is filtered
-// out, the original list is returned so the caller keeps forwarding the real
-// upstream error instead of reporting a missing channel.
+// or that the current request already tried. An empty result ends selection.
 func filterUnavailableChannels(channelIds []int, modelName string, usedChannelIds []int) []int {
 	if len(channelIds) == 0 {
 		return channelIds
@@ -146,9 +148,6 @@ func filterUnavailableChannels(channelIds []int, modelName string, usedChannelId
 		if channelModelAvailable(channelId, modelName, used) {
 			filtered = append(filtered, channelId)
 		}
-	}
-	if len(filtered) == 0 {
-		return channelIds
 	}
 	return filtered
 }

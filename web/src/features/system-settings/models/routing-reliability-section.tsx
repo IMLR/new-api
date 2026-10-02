@@ -300,7 +300,7 @@ export function RoutingReliabilitySection({
                 name='RetryTimes'
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>{t('Retry Times')}</FormLabel>
+                    <FormLabel>{t('Task retry times')}</FormLabel>
                     <FormControl>
                       <Input
                         type='number'
@@ -310,7 +310,9 @@ export function RoutingReliabilitySection({
                       />
                     </FormControl>
                     <FormDescription>
-                      {t('Number of times to retry failed requests (0-10)')}
+                      {t(
+                        'Task requests retry up to this limit (0-10). Model requests try every available channel.'
+                      )}
                     </FormDescription>
                     <FormMessage />
                   </FormItem>

@@ -4,8 +4,20 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestChannelModelCooldownRetainsLaterReset(t *testing.T) {
+	until := time.Now().Add(20 * time.Hour)
+	MarkChannelModelCooldown(301, "deepseek-v4-flash", until, "daily cap")
+	t.Cleanup(func() { MarkChannelModelCooldown(301, "deepseek-v4-flash", time.Time{}, "") })
+	MarkChannelModelCooldown(301, "deepseek-v4-flash", time.Now().Add(55*time.Second), "rate limit")
+	entries := ChannelModelCooldowns(301)
+	require.Len(t, entries, 1)
+	assert.Equal(t, until, entries[0].Until)
+	assert.Equal(t, "daily cap", entries[0].Reason)
+}
 
 func TestChannelModelCooldownWindow(t *testing.T) {
 	MarkChannelModelCooldown(12, "kimi-k3", time.Now().Add(time.Hour), "daily free limit")
@@ -30,9 +42,8 @@ func TestFilterUnavailableChannels(t *testing.T) {
 	// A different model keeps every channel.
 	require.Equal(t, channels, filterUnavailableChannels(channels, "deepseek-v4-flash", nil))
 
-	// When every candidate is unavailable the original list is kept so the
-	// caller can still report the upstream error.
-	require.Equal(t, channels, filterUnavailableChannels(channels, "kimi-k3", []int{1, 3}))
+	// Exhausted candidates stay excluded rather than starting another cycle.
+	require.Empty(t, filterUnavailableChannels(channels, "kimi-k3", []int{1, 3}))
 }
 
 func TestChannelModelCooldownExpiresByTime(t *testing.T) {

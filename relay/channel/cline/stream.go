@@ -24,6 +24,7 @@ type UpstreamError struct {
 	StatusCode int
 	Code       string
 	Message    string
+	RetryAfter string
 }
 
 func (e *UpstreamError) Error() string { return e.Message }
@@ -146,7 +147,15 @@ func readErrorBody(resp *http.Response) (*UpstreamError, error) {
 		resp.ContentLength = int64(len(buffered))
 		resp.Header.Del("Content-Length")
 	}
-	return parseErrorBody(buffered), nil
+	upstreamErr := parseErrorBody(buffered)
+	if upstreamErr == nil && resp.StatusCode == http.StatusTooManyRequests {
+		upstreamErr = &UpstreamError{Message: http.StatusText(resp.StatusCode)}
+	}
+	if upstreamErr != nil {
+		upstreamErr.StatusCode = resp.StatusCode
+		upstreamErr.RetryAfter = resp.Header.Get("Retry-After")
+	}
+	return upstreamErr, nil
 }
 
 // peekFirstFrameError inspects the first SSE event before any byte reaches the

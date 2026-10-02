@@ -214,7 +214,7 @@
 | ChannelFilters | 状态、类型、标签、分组、关键字 |
 | ChannelBulkActions | 批量启用、停用、删除、测活、编辑标签、复制、拉取模型 |
 | ChannelStatusToggle | 单独启用或停用，带乐观更新 |
-| ChannelRetryBadge | 展示当前最大重试次数，可跳转高级配置 |
+| ChannelRetryBadge | 展示模型请求重试全部可用渠道，可跳转重试设置 |
 
 编辑器（抽屉或整页，同一个表单组件）：
 
@@ -304,7 +304,7 @@
 | SettingsSection | 单个设置分区，标题、说明、内容、保存条 |
 | OptionForm | 读写 `/api/option/`，提交前对比差异 |
 | GlobalModelSettingsForm | 请求原样转发开关、思考模型黑名单、Chat Completions 到 Responses 的转换策略、连通性检测间隔 |
-| RoutingReliabilityForm | 最大重试次数、渠道自动停用阈值与关键字、自动启用、自动重试状态码、自动测试渠道（开关、间隔、测试模式） |
+| RoutingReliabilityForm | 任务重试次数、模型请求尝试全部可用渠道的说明、渠道自动停用阈值与关键字、自动启用、自动重试状态码、自动测试渠道（开关、间隔、测试模式） |
 | ChannelAffinityForm | 开关、最大条目、默认存活时间、成功切换、渠道停用时保留 |
 | AffinityRuleTable | 亲和性规则列表 |
 | AffinityRuleEditor | 单条规则编辑 |

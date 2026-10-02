@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -105,4 +106,24 @@ func TestReadErrorBodyKeepsResponseReadable(t *testing.T) {
 	require.Equal(t, body, string(restored))
 	require.Equal(t, int64(len(body)), resp.ContentLength)
 	require.Empty(t, resp.Header.Get("Content-Length"))
+}
+
+func TestReadErrorBodyPreservesRateLimitStatusAndHeader(t *testing.T) {
+	for _, body := range []string{`{"error":{"message":"Please wait before retrying"}}`, ""} {
+		resp := &http.Response{
+			StatusCode: http.StatusTooManyRequests,
+			Header:     http.Header{"Retry-After": {"55"}},
+			Body:       io.NopCloser(strings.NewReader(body)),
+		}
+		upstreamErr, err := readErrorBody(resp)
+		require.NoError(t, err)
+		require.NotNil(t, upstreamErr)
+		now := time.Date(2026, 10, 2, 12, 44, 0, 0, time.UTC)
+		until, ok := upstreamErr.CooldownUntil(now)
+		require.True(t, ok)
+		assert.Equal(t, now.Add(55*time.Second), until)
+		restored, err := io.ReadAll(resp.Body)
+		require.NoError(t, err)
+		assert.Equal(t, body, string(restored))
+	}
 }

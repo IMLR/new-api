@@ -24,6 +24,7 @@ type ProbeResult struct {
 	Message    string        `json:"message,omitempty"`
 	Window     time.Duration `json:"-"`
 	Latency    time.Duration `json:"-"`
+	RetryAfter string        `json:"-"`
 }
 
 // CooldownUntil returns the time when the probed model can serve requests
@@ -32,10 +33,7 @@ func (r *ProbeResult) CooldownUntil(now time.Time) (time.Time, bool) {
 	if r == nil || r.Available || r.StatusCode != http.StatusTooManyRequests {
 		return time.Time{}, false
 	}
-	if !IsDailyFreeLimit(r.Code, r.Message) {
-		return time.Time{}, false
-	}
-	return now.Add(QuotaWindow(r.Message)), true
+	return CooldownUntil(r.StatusCode, r.Code, r.Message, r.RetryAfter, now)
 }
 
 // ProbeModel sends one minimal streaming completion. Cline reports the daily
@@ -78,7 +76,7 @@ func ProbeModel(
 		return nil, err
 	}
 	defer resp.Body.Close()
-	result := &ProbeResult{StatusCode: resp.StatusCode}
+	result := &ProbeResult{StatusCode: resp.StatusCode, RetryAfter: resp.Header.Get("Retry-After")}
 	// A success needs no body: the status already proves the route has quota.
 	if resp.StatusCode == http.StatusOK {
 		_, _ = io.CopyN(io.Discard, resp.Body, 1<<10)

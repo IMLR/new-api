@@ -130,6 +130,7 @@ var AutomaticEnableChannelEnabled = false
 var QuotaRemindThreshold = 1000
 var PreConsumedQuota = 500
 
+// RetryTimes bounds task submission retries; model relays exhaust eligible channels.
 var RetryTimes = 0
 
 //var RootUserEmail = ""

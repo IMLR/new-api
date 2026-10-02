@@ -52,6 +52,10 @@ func TestChannelSelectionConsumesLayerBeforeDescending(t *testing.T) {
 	third, err := GetRandomSatisfiedChannel("default", "kimi-k3", 2, "", []int{101, 102})
 	require.NoError(t, err)
 	require.Equal(t, 103, third.Id)
+
+	channel, err := GetRandomSatisfiedChannel("default", "kimi-k3", 3, "", []int{101, 102, 103})
+	require.NoError(t, err)
+	require.Nil(t, channel)
 }
 
 func TestChannelSelectionSkipsCoolingAccountPerModel(t *testing.T) {
@@ -80,6 +84,15 @@ func TestChannelSelectionSkipsCoolingAccountPerModel(t *testing.T) {
 	channel, err = GetRandomSatisfiedChannel("default", "deepseek-v4-flash", 0, "", nil)
 	require.NoError(t, err)
 	require.Equal(t, 201, channel.Id)
+
+	MarkChannelModelCooldown(202, "kimi-k3", time.Now().Add(time.Hour), "")
+	t.Cleanup(func() {
+		MarkChannelModelCooldown(201, "kimi-k3", time.Time{}, "")
+		MarkChannelModelCooldown(202, "kimi-k3", time.Time{}, "")
+	})
+	channel, err = GetRandomSatisfiedChannel("default", "kimi-k3", 0, "", nil)
+	require.NoError(t, err)
+	require.Nil(t, channel)
 }
 
 func TestHighestPriorityAbilitiesKeepsTopLayer(t *testing.T) {

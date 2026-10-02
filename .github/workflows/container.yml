@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Verify channel detection and endpoint preferences
+    name: Verify model routing and channel behavior
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -31,7 +31,7 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Lint channel changes
         working-directory: web
-        run: bunx oxlint --format stylish -c .oxlintrc.json src/lib/handle-server-error.ts src/lib/handle-server-error.test.ts src/features/channels/api.ts src/features/channels/lib/channel-form.ts src/features/channels/components/channel-detection-settings.tsx src/features/channels/components/dialogs/channel-fingerprint-button.tsx src/features/channels/components/dialogs/channel-test-dialog.tsx src/features/channels/components/drawers/channel-mutate-drawer.tsx src/features/channels/components/__tests__/channel-detection-settings.test.tsx src/features/channels/components/__tests__/channel-fingerprint-button.test.tsx src/features/channels/lib/__tests__/channel-detection-settings.test.ts
+        run: bunx oxlint --format stylish -c .oxlintrc.json src/lib/handle-server-error.ts src/lib/handle-server-error.test.ts src/features/channels/api.ts src/features/channels/index.tsx src/features/system-settings/models/routing-reliability-section.tsx src/features/channels/lib/channel-form.ts src/features/channels/components/channel-detection-settings.tsx src/features/channels/components/dialogs/channel-fingerprint-button.tsx src/features/channels/components/dialogs/channel-test-dialog.tsx src/features/channels/components/drawers/channel-mutate-drawer.tsx src/features/channels/components/__tests__/channel-detection-settings.test.tsx src/features/channels/components/__tests__/channel-fingerprint-button.test.tsx src/features/channels/lib/__tests__/channel-detection-settings.test.ts
       - name: Type check
         if: ${{ !cancelled() }}
         working-directory: web
@@ -46,6 +46,11 @@ jobs:
       - name: WorkBuddy regression tests
         if: ${{ !cancelled() }}
         run: go test ./pkg/workbuddy ./relay/channel/workbuddy ./relay/channel/task/workbuddy -count=1
+      - name: Relay retry and Cline cooldown regression tests
+        if: ${{ !cancelled() }}
+        run: |
+          go test ./pkg/cline ./relay/channel/cline -count=1
+          go test ./model ./service ./controller ./middleware -run 'Test(ChannelModelCooldown|ChannelSelection|FilterUnavailable|Relay(Retries|KeepsLast|RetryStops)|AutoGroupRetry)' -count=1
   build:
     needs: verify
     name: Build multi-platform image

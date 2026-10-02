@@ -105,14 +105,16 @@ func Distribute() func(c *gin.Context) {
 					affinityUsable := false
 					preferred, err := model.CacheGetChannel(preferredChannelID)
 					if err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled &&
+						!model.IsChannelModelCoolingDown(preferred.Id, modelRequest.Model) &&
 						channelSupportsRequestPath(preferred, c.Request.URL.Path, modelRequest.Model) {
 						if usingGroup == "auto" {
 							userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 							autoGroups := service.GetUserAutoGroup(userGroup)
-							for _, g := range autoGroups {
+							for i, g := range autoGroups {
 								if model.IsChannelEnabledForGroupModel(g, modelRequest.Model, preferred.Id) {
 									selectGroup = g
 									common.SetContextKey(c, constant.ContextKeyAutoGroup, g)
+									common.SetContextKey(c, constant.ContextKeyAutoGroupIndex, i)
 									channel = preferred
 									affinityUsable = true
 									service.MarkChannelAffinityUsed(c, g, preferred.Id)

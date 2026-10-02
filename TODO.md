@@ -5,6 +5,11 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-10-02: Unified Cline daily-cap and rate-limit cooldowns, including
+  `Retry after` messages and `Retry-After` headers. Model requests exhaust
+  distinct eligible channels across priority layers and permitted auto groups;
+  cooling or previously tried candidates are never recycled. Added HTTP relay
+  regression coverage and updated retry settings in all seven UI languages.
 - 2026-10-02: Added bounded WorkBuddy chat retries for HTTP/SSE error `11133`
   with unchanged request bodies and shared retry limits, cancellation support,
   preserved upstream business codes and rejected-request parameter summaries.

@@ -53,6 +53,22 @@ func TestProbeModelReportsAvailableRoute(t *testing.T) {
 	assert.False(t, limited)
 }
 
+func TestProbeModelHonorsRateRetryAfter(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "55")
+		w.WriteHeader(http.StatusTooManyRequests)
+		fmt.Fprint(w, `{"error":{"message":"Too many requests"}}`)
+	}))
+	t.Cleanup(server.Close)
+	result, err := ProbeModel(context.Background(), server.Client(), server.URL, &Credential{AccessToken: "a"}, "deepseek-v4-flash")
+	require.NoError(t, err)
+	assert.False(t, result.Available)
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	until, limited := result.CooldownUntil(now)
+	require.True(t, limited)
+	assert.Equal(t, now.Add(55*time.Second), until)
+}
+
 func TestProbeModelKeepsPlainTextErrors(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadGateway)

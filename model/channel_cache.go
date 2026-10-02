@@ -130,8 +130,8 @@ func SyncChannelCache(frequency int) {
 }
 
 // GetRandomSatisfiedChannel picks a channel for the given group and model.
-// retry is the attempt index of the current request and only bounds the caller
-// loop: the priority layer is derived from the candidates that are still
+// retry is the attempt index of the current request. The priority layer is
+// derived from the candidates that are still
 // available, so a retry stays inside the current layer until every account
 // there is cooling down or already tried by this request.
 func GetRandomSatisfiedChannel(group string, model string, retry int, requestPath string, usedChannelIds []int) (*Channel, error) {
@@ -159,6 +159,9 @@ func GetRandomSatisfiedChannel(group string, model string, retry int, requestPat
 	// Skip accounts that reported a quota window for this model and channels
 	// already tried by the current request.
 	channels = filterUnavailableChannels(channels, model, usedChannelIds)
+	if len(channels) == 0 {
+		return nil, nil
+	}
 
 	if len(channels) == 1 {
 		if channel, ok := channelsIDM[channels[0]]; ok {
