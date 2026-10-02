@@ -66,15 +66,10 @@ func GetAllEnableAbilities() []Ability {
 // remaining candidates wins, so retries consume one layer before dropping to
 // the next one.
 func GetChannel(group string, model string, retry int, requestPath string, usedChannelIds []int) (*Channel, error) {
-	var abilities []Ability
-
-	err := DB.Where(commonGroupCol+" = ? and model = ? and enabled = ?", group, model, true).
-		Order("weight DESC").
-		Find(&abilities).Error
+	abilities, err := getModelRoutingAbilities(group, model, requestPath)
 	if err != nil {
 		return nil, err
 	}
-	abilities = filterAbilitiesByRequestPathAndModel(abilities, requestPath, model)
 	abilities = filterUnavailableAbilities(abilities, model, usedChannelIds)
 	abilities = highestPriorityAbilities(abilities)
 	channel := Channel{}
@@ -141,7 +136,7 @@ func filterAbilitiesByRequestPathAndModel(abilities []Ability, requestPath strin
 			filtered = append(filtered, ability)
 			continue
 		}
-		if config != nil && config.SupportsPathForModel(requestPath, model) {
+		if config != nil && config.SupportsPathForModel(requestPath, ability.Model) {
 			filtered = append(filtered, ability)
 		}
 	}
@@ -156,10 +151,13 @@ func filterUnavailableAbilities(abilities []Ability, model string, usedChannelId
 		return abilities
 	}
 	used := toChannelIdSet(usedChannelIds)
+	seen := make(map[int]bool)
 	filtered := make([]Ability, 0, len(abilities))
 	for _, ability := range abilities {
-		if channelModelAvailable(ability.ChannelId, model, used) {
+		if !seen[ability.ChannelId] && channelModelAvailable(ability.ChannelId, model, used) &&
+			!IsChannelModelCoolingDown(ability.ChannelId, ability.Model) {
 			filtered = append(filtered, ability)
+			seen[ability.ChannelId] = true
 		}
 	}
 	return filtered

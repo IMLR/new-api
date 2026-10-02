@@ -47,6 +47,11 @@ func InitChannelCache() {
 		common.SysError("load channel model exclusions: " + err.Error())
 		return
 	}
+	newModelRoutingMatchers, err := loadModelRoutingMatchers()
+	if err != nil {
+		common.SysError("load model routing rules: " + err.Error())
+		return
+	}
 	groups := make(map[string]bool)
 	disabledAbilities := make(map[string]map[string]map[int]bool)
 	for _, ability := range abilities {
@@ -96,6 +101,7 @@ func InitChannelCache() {
 
 	channelSyncLock.Lock()
 	group2model2channels = newGroup2model2channels
+	modelRoutingMatchers = newModelRoutingMatchers
 	//channelsIDM = newChannelId2channel
 	for i, channel := range newChannelId2channel {
 		if channel.ChannelInfo.IsMultiKey {
@@ -143,13 +149,18 @@ func GetRandomSatisfiedChannel(group string, model string, retry int, requestPat
 	channelSyncLock.RLock()
 	defer channelSyncLock.RUnlock()
 
-	// First, try to find channels with the exact model name.
-	channels := filterChannelsByRequestPathAndModel(group2model2channels[group][model], requestPath, model)
-
-	// If no channels found, try to find channels with the normalized model name.
-	if len(channels) == 0 {
-		normalizedModel := ratio_setting.FormatMatchingModelName(model)
-		channels = filterChannelsByRequestPathAndModel(group2model2channels[group][normalizedModel], requestPath, model)
+	var channels []int
+	if modelRoutingMatchers[model] != nil {
+		for channelID := range matchingChannelModels(group, model, requestPath, usedChannelIds) {
+			channels = append(channels, channelID)
+		}
+		sort.Ints(channels)
+	} else {
+		channels = filterChannelsByRequestPathAndModel(group2model2channels[group][model], requestPath, model)
+		if len(channels) == 0 {
+			normalizedModel := ratio_setting.FormatMatchingModelName(model)
+			channels = filterChannelsByRequestPathAndModel(group2model2channels[group][normalizedModel], requestPath, model)
+		}
 	}
 
 	if len(channels) == 0 {

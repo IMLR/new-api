@@ -108,9 +108,7 @@ func CreateModelMeta(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
-	if len(m.ChannelSelections) > 0 {
-		model.InitChannelCache()
-	}
+	model.InitChannelCache()
 	model.RefreshPricing()
 	common.ApiSuccess(c, &m)
 }
@@ -150,9 +148,7 @@ func UpdateModelMeta(c *gin.Context) {
 			return
 		}
 	}
-	if len(m.ChannelSelections) > 0 {
-		model.InitChannelCache()
-	}
+	model.InitChannelCache()
 	model.RefreshPricing()
 	common.ApiSuccess(c, &m)
 }
@@ -169,6 +165,7 @@ func DeleteModelMeta(c *gin.Context) {
 		common.ApiError(c, err)
 		return
 	}
+	model.InitChannelCache()
 	model.RefreshPricing()
 	common.ApiSuccess(c, nil)
 }

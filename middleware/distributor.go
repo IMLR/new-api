@@ -105,13 +105,13 @@ func Distribute() func(c *gin.Context) {
 					affinityUsable := false
 					preferred, err := model.CacheGetChannel(preferredChannelID)
 					if err == nil && preferred != nil && preferred.Status == common.ChannelStatusEnabled &&
-						!model.IsChannelModelCoolingDown(preferred.Id, modelRequest.Model) &&
-						channelSupportsRequestPath(preferred, c.Request.URL.Path, modelRequest.Model) {
+						!model.IsChannelModelCoolingDown(preferred.Id, modelRequest.Model) {
 						if usingGroup == "auto" {
 							userGroup := common.GetContextKeyString(c, constant.ContextKeyUserGroup)
 							autoGroups := service.GetUserAutoGroup(userGroup)
 							for i, g := range autoGroups {
-								if model.IsChannelEnabledForGroupModel(g, modelRequest.Model, preferred.Id) {
+								if model.IsChannelEnabledForGroupModel(g, modelRequest.Model, preferred.Id) &&
+									channelSupportsRequestPath(preferred, g, c.Request.URL.Path, modelRequest.Model) {
 									selectGroup = g
 									common.SetContextKey(c, constant.ContextKeyAutoGroup, g)
 									common.SetContextKey(c, constant.ContextKeyAutoGroupIndex, i)
@@ -121,7 +121,8 @@ func Distribute() func(c *gin.Context) {
 									break
 								}
 							}
-						} else if model.IsChannelEnabledForGroupModel(usingGroup, modelRequest.Model, preferred.Id) {
+						} else if model.IsChannelEnabledForGroupModel(usingGroup, modelRequest.Model, preferred.Id) &&
+							channelSupportsRequestPath(preferred, usingGroup, c.Request.URL.Path, modelRequest.Model) {
 							channel = preferred
 							selectGroup = usingGroup
 							affinityUsable = true
@@ -163,7 +164,10 @@ func Distribute() func(c *gin.Context) {
 			}
 		}
 		common.SetContextKey(c, constant.ContextKeyRequestStartTime, time.Now())
-		SetupContextForSelectedChannel(c, channel, modelRequest.Model)
+		if setupErr := SetupContextForSelectedChannel(c, channel, modelRequest.Model); channel != nil && setupErr != nil {
+			abortWithOpenAiMessage(c, http.StatusServiceUnavailable, setupErr.Error(), types.ErrorCodeGetChannelFailed)
+			return
+		}
 		c.Next()
 		if channel != nil && c.Writer != nil && c.Writer.Status() < http.StatusBadRequest {
 			service.RecordChannelAffinity(c, channel.Id)
@@ -174,15 +178,19 @@ func Distribute() func(c *gin.Context) {
 // channelSupportsRequestPath reports whether a channel can serve the request path.
 // Only Advanced Custom (type 58) channels are path-checked; all other channel types
 // always pass. A type-58 channel is usable only when one of its routes matches.
-func channelSupportsRequestPath(channel *model.Channel, requestPath string, requestModel string) bool {
+func channelSupportsRequestPath(channel *model.Channel, group, requestPath, requestModel string) bool {
 	if channel == nil {
+		return false
+	}
+	matchedModel, err := model.ResolveChannelModel(group, requestModel, channel.Id, requestPath)
+	if err != nil {
 		return false
 	}
 	if channel.Type != constant.ChannelTypeAdvancedCustom {
 		return true
 	}
 	config := channel.GetOtherSettings().AdvancedCustom
-	return config != nil && config.SupportsPathForModel(requestPath, requestModel)
+	return config != nil && config.SupportsPathForModel(requestPath, matchedModel)
 }
 
 // getModelFromRequest 从请求中读取模型信息
@@ -447,6 +455,25 @@ func SetupContextForSelectedChannel(c *gin.Context, channel *model.Channel, mode
 	if channel == nil {
 		return types.NewError(errors.New("channel is nil"), types.ErrorCodeGetChannelFailed, types.ErrOptionWithSkipRetry())
 	}
+	group := common.GetContextKeyString(c, constant.ContextKeyUsingGroup)
+	if group == "auto" {
+		group = common.GetContextKeyString(c, constant.ContextKeyAutoGroup)
+	}
+	requestPath := ""
+	if c.Request != nil && c.Request.URL != nil {
+		requestPath = c.Request.URL.Path
+	}
+	matchedModel, err := model.ResolveChannelModel(group, modelName, channel.Id, requestPath)
+	if err != nil {
+		if _, forced := common.GetContextKey(c, constant.ContextKeyTokenSpecificChannelId); !forced {
+			return types.NewError(err, types.ErrorCodeGetChannelFailed)
+		}
+		matchedModel = modelName
+	}
+	if matchedModel == modelName {
+		matchedModel = ""
+	}
+	common.SetContextKey(c, constant.ContextKeyChannelMatchedModel, matchedModel)
 	common.SetContextKey(c, constant.ContextKeyChannelId, channel.Id)
 	common.SetContextKey(c, constant.ContextKeyChannelName, channel.Name)
 	common.SetContextKey(c, constant.ContextKeyChannelType, channel.Type)

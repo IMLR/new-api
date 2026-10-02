@@ -1,9 +1,12 @@
 package common
 
 import (
+	"bytes"
 	"io"
 
 	"github.com/QuantumNous/new-api/common"
+	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 )
 
 // NewOutboundJSONBody wraps the already-marshaled upstream request body into a
@@ -28,4 +31,27 @@ func NewOutboundJSONBody(data []byte) (body io.Reader, size int64, closer io.Clo
 		return nil, 0, nil, err
 	}
 	return common.ReaderOnly(storage), storage.Size(), storage, nil
+}
+
+// PassthroughRequestBody replaces only the JSON model field when routing mapped
+// a name. Unknown fields and the reusable client body survive channel retries.
+// Protocols without a body model (such as Gemini) keep their original payload.
+func PassthroughRequestBody(storage common.BodyStorage, info *RelayInfo) (io.Reader, error) {
+	info.UpstreamRequestBodySize = storage.Size()
+	if !info.IsModelMapped {
+		return common.ReaderOnly(storage), nil
+	}
+	data, err := storage.Bytes()
+	if err != nil {
+		return nil, err
+	}
+	if !gjson.GetBytes(data, "model").Exists() {
+		return common.ReaderOnly(storage), nil
+	}
+	mapped, err := sjson.SetBytes(data, "model", info.UpstreamModelName)
+	if err != nil {
+		return nil, err
+	}
+	info.UpstreamRequestBodySize = int64(len(mapped))
+	return bytes.NewReader(mapped), nil
 }
