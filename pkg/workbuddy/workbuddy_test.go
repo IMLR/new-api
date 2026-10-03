@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/QuantumNous/new-api/common"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -164,10 +165,53 @@ func TestPrepareBodyAddsGlobalSystemMessage(t *testing.T) {
 	require.Len(t, messages, 2)
 	first := messages[0].(map[string]any)
 	assert.Equal(t, "system", first["role"])
-	assert.Equal(t, "You are a helpful assistant.", first["content"])
+	assert.Equal(t, "", first["content"], "no behavioral prompt is invented")
 
 	cn := prepare(t, body, PrepareOptions{UID: "uid-1"})
 	assert.Len(t, cn["messages"].([]any), 1)
+}
+
+func TestPrepareBodyPreservesCallerSystemMessages(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		messages string
+		want     string
+	}{
+		{
+			name:     "existing prompt wins over channel fallback",
+			messages: `[{"role":"system","content":"Only output JSON."},{"role":"user","content":"hello"}]`,
+			want:     `[{"role":"system","content":"Only output JSON."},{"role":"user","content":"hello"}]`,
+		},
+		{
+			name:     "later prompt moves first without rewriting content",
+			messages: `[{"role":"user","content":"hello"},{"role":"system","content":"Only output JSON."},{"role":"assistant","content":"{}"}]`,
+			want:     `[{"role":"system","content":"Only output JSON."},{"role":"user","content":"hello"},{"role":"assistant","content":"{}"}]`,
+		},
+		{
+			name:     "developer content blocks remain intact",
+			messages: `[{"role":"user","content":"hello"},{"role":"developer","content":[{"type":"text","text":"Only output JSON."}]}]`,
+			want:     `[{"role":"system","content":[{"type":"text","text":"Only output JSON."}]},{"role":"user","content":"hello"}]`,
+		},
+		{
+			name:     "multiple prompts are retained",
+			messages: `[{"role":"user","content":"hello"},{"role":"system","content":"First rule."},{"role":"developer","content":"Second rule."}]`,
+			want:     `[{"role":"system","content":"First rule."},{"role":"user","content":"hello"},{"role":"system","content":"Second rule."}]`,
+		},
+		{
+			name:     "configured fallback only when caller has no prompt",
+			messages: `[{"role":"user","content":"hello"}]`,
+			want:     `[{"role":"system","content":"Channel rule."},{"role":"user","content":"hello"}]`,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			parsed := prepare(t, `{"model":"gpt-6-luna","messages":`+tc.messages+`}`, PrepareOptions{
+				Global: true, SystemPrompt: "Channel rule.",
+			})
+			var want []any
+			require.NoError(t, common.UnmarshalJsonStr(tc.want, &want))
+			assert.Equal(t, want, parsed["messages"])
+		})
+	}
 }
 
 func TestPrepareBodyLeavesBrokenInputUntouched(t *testing.T) {

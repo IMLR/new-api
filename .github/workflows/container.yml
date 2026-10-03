@@ -45,7 +45,9 @@ jobs:
         run: go test ./pkg/modelfingerprint ./controller ./model ./service ./router -run 'Test(RankMatchesFrozen|RefusalDoesNot|NumbersSelect|Fingerprint|ChannelTestUsesSaved|ChannelEndpointPreference|ExtractTestReply|ResponsesPolicySkips|ChannelTestEndpointSkips)' -count=1
       - name: WorkBuddy regression tests
         if: ${{ !cancelled() }}
-        run: go test ./pkg/workbuddy ./relay/channel/workbuddy ./relay/channel/task/workbuddy -count=1
+        run: |
+          go test ./common -run TestWorkBuddyResponsesEndpointsAreScopedToGPTChat -count=1
+          go test ./pkg/workbuddy ./relay/channel/workbuddy ./relay/channel/task/workbuddy -count=1
       - name: Relay retry and Cline cooldown regression tests
         if: ${{ !cancelled() }}
         run: |

@@ -172,7 +172,14 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 	if err := unsupportedRelayMode(info.RelayMode); err != nil {
 		return nil, err
 	}
+	if info.RelayMode == relayconstant.RelayModeResponses && !common.WorkBuddySupportsResponses(info.UpstreamModelName) {
+		return nil, fmt.Errorf("WorkBuddy Responses conversion only supports GPT chat models, got %q", info.UpstreamModelName)
+	}
 	raw, err := io.ReadAll(body)
+	if err != nil {
+		return nil, err
+	}
+	raw, err = a.chatRequestBody(c, info, raw)
 	if err != nil {
 		return nil, err
 	}
@@ -239,6 +246,12 @@ func (a *Adaptor) DoResponse(c *gin.Context, resp *http.Response, info *relaycom
 			return nil, imageErr
 		}
 		return openai.OpenaiImageHandler(c, info, translated)
+	}
+	if info.RelayMode == relayconstant.RelayModeResponses {
+		if info.IsStream {
+			return openai.OaiChatToResponsesStreamHandler(c, info, resp)
+		}
+		return openai.OaiChatToResponsesHandler(c, info, resp)
 	}
 	return a.Adaptor.DoResponse(c, resp, info)
 }
@@ -471,6 +484,7 @@ func (a *Adaptor) prepareBody(raw []byte, info *relaycommon.RelayInfo, credentia
 		UID:              credential.UID,
 		ConversationID:   a.meta.ConversationID,
 		Global:           credential.IsGlobal(),
+		SystemPrompt:     info.ChannelSetting.SystemPrompt,
 		Sanitize:         true,
 	}
 	return workbuddyapi.PrepareBody(raw, opts)

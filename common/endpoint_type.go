@@ -1,6 +1,17 @@
 package common
 
-import "github.com/QuantumNous/new-api/constant"
+import (
+	"strings"
+
+	"github.com/QuantumNous/new-api/constant"
+)
+
+// WorkBuddySupportsResponses describes client-side compatibility, not the
+// upstream wire. Only GPT chat models use the Responses-to-chat bridge.
+func WorkBuddySupportsResponses(modelName string) bool {
+	modelName = strings.ToLower(strings.TrimSpace(modelName))
+	return strings.HasPrefix(modelName, "gpt-") && !IsImageGenerationModel(modelName)
+}
 
 // ChannelTypeServesOpenAIResponses reports whether the upstream of a channel
 // type accepts the OpenAI Responses wire.
@@ -72,11 +83,12 @@ func GetEndpointTypesByChannelType(channelType int, modelName string) []constant
 			constant.EndpointTypeAnthropic,
 		}
 	case constant.ChannelTypeWorkBuddy:
-		// The upstream speaks OpenAI chat completions; the relay converts the
-		// other client protocols into that shape.
 		endpointTypes = []constant.EndpointType{
 			constant.EndpointTypeOpenAI,
 			constant.EndpointTypeAnthropic,
+		}
+		if WorkBuddySupportsResponses(modelName) {
+			endpointTypes = append(endpointTypes, constant.EndpointTypeOpenAIResponse)
 		}
 	default:
 		if IsOpenAIResponseOnlyModel(modelName) {

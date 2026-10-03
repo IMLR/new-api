@@ -1,8 +1,9 @@
 package workbuddy
 
 import (
-	"encoding/json"
 	"strings"
+
+	"github.com/QuantumNous/new-api/common"
 )
 
 // PrepareOptions carries everything the body pipeline needs beyond the request
@@ -17,6 +18,9 @@ type PrepareOptions struct {
 	UID            string
 	ConversationID string
 	Global         bool
+	// SystemPrompt is the channel's configured prompt, used only when the
+	// caller provided no system or developer message.
+	SystemPrompt string
 	// Sanitize enables the review fingerprint cleanup.
 	Sanitize bool
 }
@@ -29,7 +33,7 @@ func PrepareBody(src []byte, opts PrepareOptions) []byte {
 		return src
 	}
 	var obj map[string]any
-	if err := json.Unmarshal(src, &obj); err != nil {
+	if err := common.Unmarshal(src, &obj); err != nil {
 		return src
 	}
 	obj["stream"] = true
@@ -47,7 +51,6 @@ func PrepareBody(src []byte, opts PrepareOptions) []byte {
 		repaired, _ = cleanupOrphanToolCalls(repaired)
 		obj["messages"] = repaired
 	}
-	model, _ := obj["model"].(string)
 	injectThinking(obj, opts.SupportedEfforts, opts.DefaultEfforts)
 	normalizeReasoningEffort(obj, opts.SupportedEfforts)
 	backfillReasoningContent(obj)
@@ -56,15 +59,14 @@ func PrepareBody(src []byte, opts PrepareOptions) []byte {
 			sanitizeMessages(messages)
 		}
 	}
-	out, err := json.Marshal(obj)
+	out, err := common.Marshal(obj)
 	if err != nil {
 		return src
 	}
 	out = injectPromptCacheKey(out, opts.UID, conversationOf(obj, opts.ConversationID))
 	if opts.Global {
-		out = ensureGlobalSystem(out)
+		out = ensureGlobalSystem(out, opts.SystemPrompt)
 	}
-	_ = model
 	return out
 }
 
@@ -87,28 +89,29 @@ func injectPromptCacheKey(body []byte, uid, conversation string) []byte {
 		return body
 	}
 	var obj map[string]any
-	if err := json.Unmarshal(body, &obj); err != nil {
+	if err := common.Unmarshal(body, &obj); err != nil {
 		return body
 	}
 	if existing, ok := obj["prompt_cache_key"].(string); ok && existing != "" {
 		return body
 	}
 	obj["prompt_cache_key"] = CacheKey(uid, conversation)
-	out, err := json.Marshal(obj)
+	out, err := common.Marshal(obj)
 	if err != nil {
 		return body
 	}
 	return out
 }
 
-// ensureGlobalSystem prepends a system message for global accounts when the
-// client sends none, which the international deployment requires.
-func ensureGlobalSystem(body []byte) []byte {
+// ensureGlobalSystem puts the caller's first system message at the front.
+// With no caller prompt, the upstream accepts an empty system message, so no
+// behavioral instructions need to be invented by the gateway.
+func ensureGlobalSystem(body []byte, configuredPrompt string) []byte {
 	if len(body) == 0 {
 		return body
 	}
 	var obj map[string]any
-	if err := json.Unmarshal(body, &obj); err != nil {
+	if err := common.Unmarshal(body, &obj); err != nil {
 		return body
 	}
 	messages, ok := obj["messages"].([]any)
@@ -120,8 +123,26 @@ func ensureGlobalSystem(body []byte) []byte {
 			return body
 		}
 	}
-	obj["messages"] = append([]any{map[string]any{"role": "system", "content": "You are a helpful assistant."}}, messages...)
-	out, err := json.Marshal(obj)
+	firstSystem := -1
+	for i, raw := range messages {
+		message, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if role, _ := message["role"].(string); strings.EqualFold(strings.TrimSpace(role), "system") {
+			firstSystem = i
+			break
+		}
+	}
+	if firstSystem >= 0 {
+		system := messages[firstSystem]
+		copy(messages[1:firstSystem+1], messages[:firstSystem])
+		messages[0] = system
+	} else {
+		messages = append([]any{map[string]any{"role": "system", "content": configuredPrompt}}, messages...)
+	}
+	obj["messages"] = messages
+	out, err := common.Marshal(obj)
 	if err != nil {
 		return body
 	}

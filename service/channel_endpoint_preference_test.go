@@ -35,7 +35,9 @@ func TestResponsesPolicySkipsChatOnlyChannelTypes(t *testing.T) {
 	assert.True(t, ShouldChannelUseResponses(dto.ChannelSettings{}, 4, constant.ChannelTypeCodex, "gpt-6-astra"))
 	assert.False(t, ShouldChannelUseResponses(dto.ChannelSettings{}, 20, constant.ChannelTypeWorkBuddy, "gpt-6-astra"))
 
-	// 渠道级的显式端点配置优先于全局策略。
+	// 客户端端点配置不能改变只接受聊天协议的上游。
 	override := dto.ChannelSettings{ModelEndpoints: map[string]string{"gpt-6-astra": "openai-response"}}
-	assert.True(t, ShouldChannelUseResponses(override, 20, constant.ChannelTypeWorkBuddy, "gpt-6-astra"))
+	assert.False(t, ShouldChannelUseResponses(override, 20, constant.ChannelTypeWorkBuddy, "gpt-6-astra"))
+	assert.True(t, ShouldChannelUseResponses(override, 11, constant.ChannelTypeOpenAI, "gpt-6-astra"))
+	assert.True(t, ShouldChannelUseResponses(override, 4, constant.ChannelTypeCodex, "gpt-6-astra"))
 }

@@ -81,7 +81,7 @@
 10. DeepSeek 多轮一致性：assistant 消息补齐非空的 `reasoning` 与 `reasoning_content`。
 11. 内容审核指纹清洗：Claude Code / Codex 的固定模板句按参考实现的规则做最小改写（`11128` 拆成 `11-128`），键值型指纹整段删除。
 12. 注入 `prompt_cache_key`（`wb2a-<账号前8位>-<会话哈希>`），客户端已带则不覆盖。上游据此复用前缀缓存，实测可显著降低扣费。
-13. 国际版账号在首条消息不是 system 时补一条兜底 system。
+13. 国际版账号优先使用调用方已有的 system 消息（developer 已在前面转换）：首条不是 system 时，将已有的第一条 system 移到最前面，保留内容和其他消息的相对顺序。调用方完全没有系统提示词时，使用渠道已配置的系统提示词；渠道也未配置时，仅补充内容为空的 system 消息，不添加通用行为指令。空 system 已通过 `gpt-6-luna` 实测。
 
 ## 响应
 
@@ -140,9 +140,11 @@ WorkBuddy 的聊天请求固定走 HTTP/1.1。上游网关支持 HTTP/2，但半
 
 ## 请求端点
 
-上游只提供 chat completions 端点，因此渠道只声明 OpenAI 与 Anthropic 两种端点：Claude 请求在中转里转换成 chat completions 再发出。
+上游聊天服务只提供 `/v2/chat/completions`。已经路由到 WorkBuddy 渠道的 GPT 聊天模型同时接受 `/v1/chat/completions` 和 `/v1/responses`，两种端点都支持流式与非流式；适配器负责转换请求和回复，调用方无需切换协议。转换依据选中的渠道及映射后的上游模型，不影响其他供应商的同名 GPT 模型，也不为 WorkBuddy 的其他模型新增 Responses 支持。原有 Anthropic Messages 支持保持不变。
 
-OpenAI Responses 请求体（对话放在 `input` 里）会被上游当成缺少 `messages`，返回 `code=11128 first message is not system prompt`。所以全局的 chat completions → Responses 转换策略（`chat_completions_to_responses_policy`）对 WorkBuddy 渠道不生效，渠道测试对这类渠道的 `codex` 名称模型也走 chat 端点。
+Responses 请求中的 `instructions` 转为 system 消息，`input` 转为聊天历史，保留 developer 指令、图像输入、函数调用与结果、JSON 输出格式和推理档位。回复再转回 Responses JSON 或 SSE（包括正文、工具事件、完成事件及用量）；例如 autofilm core 使用 `openai-responses` 调用 `gpt-6-luna` 时不需要调整配置。这套转换也适用于启用了请求体原样转发的渠道。
+
+全局的 chat completions → Responses 转换策略（`chat_completions_to_responses_policy`）和渠道模型的 Responses 端点偏好都不能改变 WorkBuddy 上游的实际协议。渠道测试默认使用聊天端点，明确选择 Responses 时由适配器完成双向转换。`previous_response_id`、`conversation` 等依赖上游保存会话的字段暂不支持，调用方需要在 `input` 中携带历史；`/v1/responses/compact` 仍不支持。
 
 ## 视频生成
 

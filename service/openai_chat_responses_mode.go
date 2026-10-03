@@ -1,6 +1,7 @@
 package service
 
 import (
+	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/dto"
 	"github.com/QuantumNous/new-api/pkg/opencode"
@@ -16,8 +17,12 @@ func ShouldChatCompletionsUseResponsesGlobal(channelID int, channelType int, mod
 	return relayconvert.ShouldChatCompletionsUseResponsesGlobal(channelID, channelType, model)
 }
 
-// Channel preferences take precedence over the global conversion policy.
+// Channel preferences take precedence over the global conversion policy, but
+// cannot select a protocol the upstream does not serve.
 func ShouldChannelUseResponses(settings dto.ChannelSettings, channelID, channelType int, model string) bool {
+	if !common.ChannelTypeServesOpenAIResponses(channelType) {
+		return false
+	}
 	if endpoint := settings.ModelEndpoints[model]; endpoint != "" {
 		return endpoint == string(constant.EndpointTypeOpenAIResponse)
 	}

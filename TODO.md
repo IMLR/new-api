@@ -5,6 +5,17 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-10-03: Fixed direct WorkBuddy GPT Responses requests, including autofilm
+  core's streaming `gpt-6-luna` calls. The adaptor converts instructions,
+  history, function tools and parameters to chat, then converts text, tool
+  calls and usage back to Responses JSON/SSE. Responses requests still convert
+  when request-body pass-through is enabled, and endpoint preferences cannot
+  select an unsupported upstream protocol. Existing caller system/developer
+  prompts are preserved; absent prompts use channel configuration or an empty
+  system message instead of invented generic instructions. Both Chat
+  Completions and Responses support streaming/non-streaming; other providers'
+  GPT routing is unchanged; the new Responses bridge is limited to WorkBuddy
+  GPT chat models.
 - 2026-10-02: Added WorkBuddy image generation. Image catalog entries stay in
   the channel model list and relay through `POST /v1/images/generations`; the
   adaptor calls the gateway's `/v2/images/generations` endpoint, translates the
