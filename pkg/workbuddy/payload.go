@@ -19,7 +19,7 @@ type PrepareOptions struct {
 	ConversationID string
 	Global         bool
 	// SystemPrompt is the channel's configured prompt, used only when the
-	// caller provided no system or developer message.
+	// caller provided no system/developer message, or an empty one for Kimi.
 	SystemPrompt string
 	// Sanitize enables the review fingerprint cleanup.
 	Sanitize bool
@@ -104,8 +104,7 @@ func injectPromptCacheKey(body []byte, uid, conversation string) []byte {
 }
 
 // ensureGlobalSystem puts the caller's first system message at the front.
-// With no caller prompt, the upstream accepts an empty system message, so no
-// behavioral instructions need to be invented by the gateway.
+// GPT accepts an empty fallback; Kimi requires non-empty system content.
 func ensureGlobalSystem(body []byte, configuredPrompt string) []byte {
 	if len(body) == 0 {
 		return body
@@ -118,9 +117,46 @@ func ensureGlobalSystem(body []byte, configuredPrompt string) []byte {
 	if !ok || len(messages) == 0 {
 		return body
 	}
-	if first, ok := messages[0].(map[string]any); ok {
-		if role, _ := first["role"].(string); strings.EqualFold(strings.TrimSpace(role), "system") {
-			return body
+	changed := false
+	model, _ := obj["model"].(string)
+	if strings.HasPrefix(strings.ToLower(strings.TrimSpace(model)), "kimi-") {
+		if strings.TrimSpace(configuredPrompt) == "" {
+			configuredPrompt = "You are a helpful assistant."
+		}
+		for _, raw := range messages {
+			message, ok := raw.(map[string]any)
+			if !ok {
+				continue
+			}
+			role, _ := message["role"].(string)
+			if !strings.EqualFold(strings.TrimSpace(role), "system") {
+				continue
+			}
+			empty := false
+			switch content := message["content"].(type) {
+			case nil:
+				empty = true
+			case string:
+				empty = strings.TrimSpace(content) == ""
+			case []any:
+				empty = true
+				for _, rawPart := range content {
+					part, ok := rawPart.(map[string]any)
+					if !ok || part["type"] != "text" {
+						empty = false
+						break
+					}
+					text, _ := part["text"].(string)
+					if strings.TrimSpace(text) != "" {
+						empty = false
+						break
+					}
+				}
+			}
+			if empty {
+				message["content"] = configuredPrompt
+				changed = true
+			}
 		}
 	}
 	firstSystem := -1
@@ -134,11 +170,14 @@ func ensureGlobalSystem(body []byte, configuredPrompt string) []byte {
 			break
 		}
 	}
-	if firstSystem >= 0 {
+	if firstSystem == 0 && !changed {
+		return body
+	}
+	if firstSystem > 0 {
 		system := messages[firstSystem]
 		copy(messages[1:firstSystem+1], messages[:firstSystem])
 		messages[0] = system
-	} else {
+	} else if firstSystem < 0 {
 		messages = append([]any{map[string]any{"role": "system", "content": configuredPrompt}}, messages...)
 	}
 	obj["messages"] = messages

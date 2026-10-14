@@ -81,7 +81,7 @@
 10. DeepSeek 多轮一致性：assistant 消息补齐非空的 `reasoning` 与 `reasoning_content`。
 11. 内容审核指纹清洗：Claude Code / Codex 的固定模板句按参考实现的规则做最小改写（`11128` 拆成 `11-128`），键值型指纹整段删除。
 12. 注入 `prompt_cache_key`（`wb2a-<账号前8位>-<会话哈希>`），客户端已带则不覆盖。上游据此复用前缀缓存，实测可显著降低扣费。
-13. 国际版账号优先使用调用方已有的 system 消息（developer 已在前面转换）：首条不是 system 时，将已有的第一条 system 移到最前面，保留内容和其他消息的相对顺序。调用方完全没有系统提示词时，使用渠道已配置的系统提示词；渠道也未配置时，仅补充内容为空的 system 消息，不添加通用行为指令。空 system 已通过 `gpt-6-luna` 实测。
+13. 国际版账号优先使用调用方已有的 system 消息（developer 已在前面转换）：首条不是 system 时，将已有的第一条 system 移到最前面，保留有效内容和其他消息的相对顺序。调用方完全没有系统提示词时，使用渠道已配置的系统提示词。`kimi-*` 模型不接受空 system：缺失提示词以及已有 system 中的空字符串、空白、null、缺失 content、空文本块都会使用渠道提示词，渠道提示词也为空时使用 `You are a helpful assistant.`。GPT 和其他模型保留原处理，渠道未配置时补充空 system；空 system 已通过 `gpt-6-luna` 实测。
 
 ## 响应
 
@@ -210,6 +210,16 @@ Responses 请求中的 `instructions` 转为 system 消息，`input` 转为聊�
 错误响应保留上游业务代码，例如 `error.code=11133`。首次准备重试时记录渠道、模型、消息数量、工具数量、`max_tokens`、`reasoning_effort` 与请求字节数，便于比较失败与复测的差异。
 
 2026-10-02 的真实接口排查中，包含原线程历史、图片与约 60 万输入 token 的重建请求成功；复测替换了工具定义并限制输出为 128 token，尚未定位原请求的具体触发字段。自动恢复行为由 HTTP/SSE 测试服务验证，尚未在真实上游复现“11133 后重试成功”。
+
+## 跨渠道重试（2026-10-14）
+
+WorkBuddy 的 HTTP 400 业务错误 `11128`（消息要求）、`11133`（参数校验）和 `11151`（空内容）允许继续尝试其他渠道，不依赖全局重试状态码是否包含 400。HTTP 错误和 SSE 首帧错误使用相同规则；`11133` 仍先执行上面的两次账号内重试，再尝试下一渠道。其他错误沿用全局重试规则。
+
+候选渠道按现有优先级、分组权限和模型可用性选择，每个渠道只尝试一次；因此 WorkBuddy 账号失败后，支持同一模型的 Moonshot 官方渠道也可以成为候选。请求取消、已向客户端输出内容、指定单一渠道、显式禁止重试或渠道亲和要求停止时，不进行跨渠道重试。全部候选失败时保留最后一次上游错误的 HTTP 状态和业务代码。
+
+渠道页面的单渠道测试仍只验证指定渠道，不进行跨渠道重试。跨渠道行为由 `controller/workbuddy_retry_test.go` 覆盖，包括 HTTP/SSE 的数字及字符串业务代码、流式和非流式请求、恢复原始请求体、Moonshot 候选以及候选全部失败。
+
+2026-10-14 使用同一国际版账号验证 `kimi-k3`：空 system 返回 HTTP 400 / `11151`；使用修复后的 `PrepareBody` 生成请求，空 system 变为 `You are a helpful assistant.`，真实接口返回 HTTP 200、正文 `OK` 和 `finish_reason=stop`。跨渠道重试使用本地 HTTP 测试服务验证，未在生产环境强制制造 WorkBuddy 错误。`go test ./pkg/workbuddy ./relay/channel/workbuddy ./controller` 全部通过，包含已有 GPT Responses 用例。
 
 ## 账号任务与地区
 

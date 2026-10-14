@@ -17,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/model"
 	perfmetrics "github.com/QuantumNous/new-api/pkg/perf_metrics"
 	"github.com/QuantumNous/new-api/relay"
+	"github.com/QuantumNous/new-api/relay/channel/workbuddy"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	relayconstant "github.com/QuantumNous/new-api/relay/constant"
 	"github.com/QuantumNous/new-api/relay/helper"
@@ -357,6 +358,9 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError) bool {
 	}
 	if operation_setting.IsAlwaysSkipRetryCode(openaiErr.GetErrorCode()) {
 		return false
+	}
+	if common.GetContextKeyInt(c, constant.ContextKeyChannelType) == constant.ChannelTypeWorkBuddy && workbuddy.ShouldFallback(openaiErr) {
+		return true
 	}
 	return operation_setting.ShouldRetryByStatusCode(code)
 }

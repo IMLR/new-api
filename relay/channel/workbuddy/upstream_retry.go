@@ -10,6 +10,7 @@ import (
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/logger"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
+	"github.com/QuantumNous/new-api/types"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,6 +20,20 @@ import (
 // bounded and shared with the empty-answer retry of this relay. A persistent
 // rejection keeps its original status and business code.
 var parameterRetryDelays = [...]time.Duration{time.Second, 4 * time.Second}
+
+// ShouldFallback identifies WorkBuddy validation failures that another
+// provider may accept. Keep the upstream status and code for exhausted routes.
+func ShouldFallback(err *types.NewAPIError) bool {
+	if err == nil || err.StatusCode != http.StatusBadRequest {
+		return false
+	}
+	switch err.GetErrorCode() {
+	case "11128", "11133", "11151":
+		return true
+	default:
+		return false
+	}
+}
 
 // requestChat checks errors before any response reaches the caller. A successful
 // stream replays every byte consumed by the first-frame check.

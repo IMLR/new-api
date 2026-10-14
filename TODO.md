@@ -5,6 +5,13 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-10-14: Fixed empty system prompts for international WorkBuddy Kimi
+  models while preserving GPT prompt handling. Missing or empty Kimi system
+  content uses the configured channel prompt or a non-empty default. WorkBuddy
+  HTTP/SSE errors 11128, 11133 and 11151 can fall back across eligible channels,
+  including Moonshot; cancellation, output and single-channel retry guards and
+  exhausted-route error codes remain intact. Added payload and HTTP relay
+  regressions for streaming/non-streaming fallback and original-body recovery.
 - 2026-10-03: Fixed direct WorkBuddy GPT Responses requests, including autofilm
   core's streaming `gpt-6-luna` calls. The adaptor converts instructions,
   history, function tools and parameters to chat, then converts text, tool

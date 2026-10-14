@@ -17,6 +17,7 @@ import (
 	"github.com/QuantumNous/new-api/middleware"
 	"github.com/QuantumNous/new-api/model"
 	clineapi "github.com/QuantumNous/new-api/pkg/cline"
+	workbuddyapi "github.com/QuantumNous/new-api/pkg/workbuddy"
 	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/service"
 	"github.com/QuantumNous/new-api/setting"
@@ -86,6 +87,14 @@ func createRetryChannel(t *testing.T, db *gorm.DB, baseURL string, index, channe
 		encoded, err := common.Marshal(clineapi.Credential{
 			AccessToken: fmt.Sprintf("account-%d", index), RefreshToken: "unused-refresh",
 			ExpiresAt: time.Now().Add(time.Hour).UnixMilli(),
+		})
+		require.NoError(t, err)
+		key = string(encoded)
+	}
+	if channelType == constant.ChannelTypeWorkBuddy {
+		encoded, err := common.Marshal(workbuddyapi.Credential{
+			AccessToken: fmt.Sprintf("account-%d", index), RefreshToken: "unused-refresh",
+			ExpiresAt: time.Now().Add(time.Hour).Unix(), Realm: workbuddyapi.RealmGlobal,
 		})
 		require.NoError(t, err)
 		key = string(encoded)
