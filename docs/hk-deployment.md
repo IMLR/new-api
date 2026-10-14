@@ -6,11 +6,14 @@ immutable image to the Hong Kong VPS.
 ## Build
 
 `.github/workflows/container.yml` builds the existing root `Dockerfile` on
-native GitHub-hosted AMD64 and ARM64 runners. Successful non-pull-request runs
-publish:
+native GitHub-hosted AMD64 runners, targeting only `linux/amd64`. ARM images
+are no longer built. Successful non-pull-request runs publish:
 
 - `ghcr.io/imlr/new-api:latest`
 - `ghcr.io/imlr/new-api:sha-<40-character-commit>`
+
+The tag and manual-branch Docker publishing workflows also target only
+`linux/amd64`; the Linux release workflow no longer builds ARM binaries.
 
 The VPS does not clone the repository or run a Docker build.
 

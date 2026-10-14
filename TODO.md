@@ -5,6 +5,8 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-10-14: Restricted automatic, tag and manual-branch Docker builds to
+  Linux/AMD64 and removed Linux ARM binary builds from release jobs.
 - 2026-10-14: Fixed empty system prompts for international WorkBuddy Kimi
   models while preserving GPT prompt handling. Missing or empty Kimi system
   content uses the configured channel prompt or a non-empty default. WorkBuddy

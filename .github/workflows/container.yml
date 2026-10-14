@@ -59,7 +59,7 @@ jobs:
         run: go test ./model ./controller ./middleware ./relay/helper ./relay/common -run 'Test(ModelRule|ModelMatchingAndExplicit|CompactAutomatic|Passthrough)' -count=1
   build:
     needs: verify
-    name: Build multi-platform image
+    name: Build AMD64 image
     uses: docker/github-builder/.github/workflows/build.yml@v1
     permissions:
       contents: read
@@ -68,7 +68,7 @@ jobs:
     with:
       output: image
       push: ${{ github.event_name != 'pull_request' }}
-      platforms: linux/amd64,linux/arm64
+      platforms: linux/amd64
       meta-images: ghcr.io/imlr/new-api
       meta-tags: |
         type=raw,value=latest
