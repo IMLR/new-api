@@ -8,9 +8,11 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
+	"github.com/QuantumNous/new-api/model"
 	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -173,4 +175,71 @@ func TestRelayWorkBuddyExhaustionPreservesRejection(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 	assert.Equal(t, []string{"Bearer account-0", "Bearer account-1"}, calls)
+}
+
+func TestRelayResetHintsCoolChannelModel(t *testing.T) {
+	db, router := setupRelayRetryTest(t)
+	started := time.Now()
+	resetAt := started.Add(20 * time.Hour).Truncate(time.Second)
+	limit := fmt.Sprintf("usage exceeds frequency limit, but don't worry, your usage will reset at %s UTC+8, alternatively, you can switch to the other models to continue using it.",
+		resetAt.In(time.FixedZone("UTC+8", 8*60*60)).Format("2006-01-02 15:04:05"))
+	var mu sync.Mutex
+	var calls []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		account := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+		mu.Lock()
+		calls = append(calls, account)
+		mu.Unlock()
+		switch account {
+		case "account-0":
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			fmt.Fprintf(w, `{"code":6004,"msg":%q}`, limit)
+		case "account-1":
+			w.Header().Set("Content-Type", "text/event-stream")
+			fmt.Fprintf(w, "data: {\"error\":{\"code\":6004,\"message\":%q}}\n\n", limit)
+		case "account-2":
+			// A quota error that is not a 429 and states a relative wait.
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprint(w, `{"code":11999,"msg":"该模型今日额度已用完，请 30 分钟后重试"}`)
+		default:
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"id":"ok","object":"chat.completion","model":"retry-contract","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}`)
+		}
+	}))
+	t.Cleanup(server.Close)
+	limited := []model.Channel{
+		createRetryChannel(t, db, server.URL, 0, constant.ChannelTypeWorkBuddy),
+		createRetryChannel(t, db, server.URL, 1, constant.ChannelTypeWorkBuddy),
+		createRetryChannel(t, db, server.URL, 2, constant.ChannelTypeWorkBuddy),
+	}
+	createRetryChannel(t, db, server.URL, 3, constant.ChannelTypeMoonshot)
+
+	for _, want := range [][]string{
+		{"account-0", "account-1", "account-2", "fallback"},
+		// While the accounts rest, the next request goes straight to the fallback.
+		{"account-0", "account-1", "account-2", "fallback", "fallback"},
+	} {
+		req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"retry-contract","messages":[{"role":"user","content":"hello"}]}`))
+		req.Header.Set("Content-Type", "application/json")
+		recorder := httptest.NewRecorder()
+		router.ServeHTTP(recorder, req)
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+		assert.Contains(t, recorder.Body.String(), `"content":"ok"`)
+		mu.Lock()
+		assert.Equal(t, want, calls)
+		mu.Unlock()
+	}
+	for i, channel := range limited {
+		cooldowns := model.ChannelModelCooldowns(channel.Id)
+		require.Len(t, cooldowns, 1)
+		assert.Equal(t, retryTestModel, cooldowns[0].ModelName)
+		if i < 2 {
+			assert.True(t, resetAt.Equal(cooldowns[0].Until), "want %s, got %s", resetAt, cooldowns[0].Until)
+			assert.Contains(t, cooldowns[0].Reason, "6004")
+			continue
+		}
+		assert.WithinDuration(t, started.Add(30*time.Minute), cooldowns[0].Until, 5*time.Second)
+	}
 }

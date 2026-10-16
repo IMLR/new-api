@@ -221,6 +221,12 @@ WorkBuddy 的 HTTP 400 业务错误 `11128`（消息要求）、`11133`（参数
 
 2026-10-14 使用同一国际版账号验证 `kimi-k3`：空 system 返回 HTTP 400 / `11151`；使用修复后的 `PrepareBody` 生成请求，空 system 变为 `You are a helpful assistant.`，真实接口返回 HTTP 200、正文 `OK` 和 `finish_reason=stop`。跨渠道重试使用本地 HTTP 测试服务验证，未在生产环境强制制造 WorkBuddy 错误。`go test ./pkg/workbuddy ./relay/channel/workbuddy ./controller` 全部通过，包含已有 GPT Responses 用例。
 
+## 频率限制冷却（2026-10-16）
+
+模型频率用尽时上游返回 HTTP 429 与业务代码 `6004`，消息带有绝对恢复时间，例如 `usage exceeds frequency limit, but don't worry, your usage will reset at 2026-10-17 18:09:40 UTC+8, alternatively, you can switch to the other models to continue using it.`。限额按「账号 × 模型」计算，同一账号的其他模型继续可用。
+
+中转按[渠道模型冷却](./channel-cooldown.md)读取恢复时间，记录该渠道在该模型上的冷却；到期前渠道选取直接跳过这个账号，不再每次请求都把所有账号试一遍，到期后自动恢复。SSE 首帧里的 `6004` 同样还原成 HTTP 429，允许继续尝试其他渠道。渠道页面的单渠道测试遇到 `6004` 也会记录冷却。
+
 ## 账号任务与地区
 
 签到与猫猫旅行只在国内版存在，国际版账号没有这两套体系；活跃上报与令牌续期在两边都能运行。任务定义里的 `Realms` 决定它服务哪个地区，渠道页据此把不执行的任务标成不适用并禁用开关，接口返回 `applicable` 字段。

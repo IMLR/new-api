@@ -35,15 +35,6 @@ func TestCooldownUntilFallbacksAndClamps(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, now.Add(time.Hour), until)
 
-	// Unknown windows are capped at 48 hours.
-	until, ok = (&UpstreamError{
-		StatusCode: http.StatusTooManyRequests,
-		Code:       "INFERENCE_CAP_ERROR",
-		Message:    "Daily free limit reached. Try again in 100h",
-	}).CooldownUntil(now)
-	require.True(t, ok)
-	require.Equal(t, now.Add(48*time.Hour), until)
-
 	// Transient throttling without a daily cap stays on the retry path.
 	_, ok = (&UpstreamError{
 		StatusCode: http.StatusTooManyRequests,
@@ -52,12 +43,13 @@ func TestCooldownUntilFallbacksAndClamps(t *testing.T) {
 	}).CooldownUntil(now)
 	require.False(t, ok)
 
-	// Non-429 errors never start a quota window.
-	_, ok = (&UpstreamError{
+	// The reset hint decides, not the status code.
+	until, ok = (&UpstreamError{
 		StatusCode: http.StatusForbidden,
 		Message:    "Daily free limit reached. Try again in 5h",
 	}).CooldownUntil(now)
-	require.False(t, ok)
+	require.True(t, ok)
+	require.Equal(t, now.Add(5*time.Hour), until)
 }
 
 func TestParseErrorBodyReadsHTTPErrorPayload(t *testing.T) {

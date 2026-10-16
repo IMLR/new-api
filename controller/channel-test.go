@@ -507,6 +507,7 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 		httpResp = resp.(*http.Response)
 		if httpResp.StatusCode != http.StatusOK {
 			err := service.RelayErrorHandler(c.Request.Context(), httpResp, true)
+			service.RecordUpstreamCooldown(c, info, err)
 			common.SysError(fmt.Sprintf(
 				"channel test bad response: channel_id=%d name=%s type=%d model=%s endpoint_type=%s status=%d err=%v",
 				channel.Id,
@@ -526,6 +527,7 @@ func testChannelWithPrompt(ctx context.Context, channel *model.Channel, testUser
 	}
 	usageA, respErr := adaptor.DoResponse(c, httpResp, info)
 	if respErr != nil {
+		service.RecordUpstreamCooldown(c, info, respErr)
 		return testResult{
 			context:     c,
 			localErr:    respErr,

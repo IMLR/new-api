@@ -2,13 +2,18 @@ package service
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/QuantumNous/new-api/common"
 	"github.com/QuantumNous/new-api/constant"
 	"github.com/QuantumNous/new-api/logger"
 	"github.com/QuantumNous/new-api/model"
+	"github.com/QuantumNous/new-api/pkg/resethint"
+	relaycommon "github.com/QuantumNous/new-api/relay/common"
 	"github.com/QuantumNous/new-api/setting"
+	"github.com/QuantumNous/new-api/types"
 	"github.com/gin-gonic/gin"
 )
 
@@ -87,4 +92,36 @@ func usedChannelIdsFromContext(ctx *gin.Context) []int {
 		}
 	}
 	return channelIDs
+}
+
+// UpstreamResetTime reads the reset time an upstream error states in its
+// message or Retry-After header, whatever its status code.
+func UpstreamResetTime(err *types.NewAPIError, now time.Time) (time.Time, bool) {
+	if err == nil {
+		return time.Time{}, false
+	}
+	return resethint.Parse(err.Error(), err.RetryAfter, now)
+}
+
+// RecordUpstreamCooldown pauses the failed channel for the requested model and
+// its upstream name until the reset time the error states. Channel selection
+// skips the channel for that model until then and takes it back afterwards;
+// its other models stay available.
+func RecordUpstreamCooldown(c *gin.Context, info *relaycommon.RelayInfo, err *types.NewAPIError) {
+	if info == nil || info.ChannelMeta == nil {
+		return
+	}
+	until, ok := UpstreamResetTime(err, time.Now())
+	if !ok {
+		return
+	}
+	reason := common.LocalLogPreview(err.Error())
+	model.MarkChannelModelCooldown(info.ChannelId, info.OriginModelName, until, reason)
+	if upstreamModel := info.UpstreamModelName; upstreamModel != "" && upstreamModel != info.OriginModelName {
+		model.MarkChannelModelCooldown(info.ChannelId, upstreamModel, until, reason)
+	}
+	logger.LogInfo(c, fmt.Sprintf(
+		"model cooldown: channel #%d model %s until %s",
+		info.ChannelId, info.OriginModelName, until.Format(time.RFC3339),
+	))
 }

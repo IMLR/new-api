@@ -5,6 +5,14 @@ Dates use UTC.
 
 ## Completed
 
+- 2026-10-16: Added shared per-channel model cooldowns for upstream reset
+  hints. `pkg/resethint` reads relative waits (English and Chinese), absolute
+  reset times with or without zones, and `Retry-After`, regardless of status
+  code. The relay loop and single-channel tests record the cooldown, and errors
+  with a reset hint retry other channels. WorkBuddy `6004` frequency limits
+  now skip the resting account until its reset time; SSE `6004` maps to 429.
+  Cline keeps its daily-cap defaults through `Retry-After`; windows are capped
+  at seven days.
 - 2026-10-14: Restricted automatic, tag and manual-branch Docker builds to
   Linux/AMD64 and removed Linux ARM binary builds from release jobs.
 - 2026-10-14: Fixed empty system prompts for international WorkBuddy Kimi

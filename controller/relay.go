@@ -235,6 +235,7 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 		relayInfo.LastError = newAPIError
 
 		processChannelError(c, *types.NewChannelError(channel.Id, channel.Type, channel.Name, channel.ChannelInfo.IsMultiKey, common.GetContextKeyString(c, constant.ContextKeyChannelKey), channel.GetAutoBan()), newAPIError)
+		service.RecordUpstreamCooldown(c, relayInfo, newAPIError)
 
 		if !shouldRetry(c, newAPIError) {
 			break
@@ -348,6 +349,10 @@ func shouldRetry(c *gin.Context, openaiErr *types.NewAPIError) bool {
 	}
 	if types.IsSkipRetryError(openaiErr) {
 		return false
+	}
+	// A stated reset time means this channel is resting, whatever the status.
+	if _, limited := service.UpstreamResetTime(openaiErr, time.Now()); limited && !operation_setting.IsAlwaysSkipRetryCode(openaiErr.GetErrorCode()) {
+		return true
 	}
 	code := openaiErr.StatusCode
 	if code >= 200 && code < 300 {

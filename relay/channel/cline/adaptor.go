@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/QuantumNous/new-api/common"
-	"github.com/QuantumNous/new-api/logger"
-	"github.com/QuantumNous/new-api/model"
 	clineapi "github.com/QuantumNous/new-api/pkg/cline"
 	"github.com/QuantumNous/new-api/relay/channel"
 	"github.com/QuantumNous/new-api/relay/channel/openai"
@@ -98,7 +98,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 			resp.Body.Close()
 			return nil, err
 		}
-		a.markQuotaCooldown(c, info, upstreamErr)
+		setQuotaRetryAfter(resp, upstreamErr)
 		return resp, nil
 	}
 	if !info.IsStream {
@@ -108,7 +108,7 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 			var upstreamErr *UpstreamError
 			if errors.As(err, &upstreamErr) {
 				upstreamErr.RetryAfter = resp.Header.Get("Retry-After")
-				a.markQuotaCooldown(c, info, upstreamErr)
+				setQuotaRetryAfter(resp, upstreamErr)
 				return upstreamErrorResponse(resp, upstreamErr), nil
 			}
 			return nil, err
@@ -131,28 +131,22 @@ func (a *Adaptor) DoRequest(c *gin.Context, info *relaycommon.RelayInfo, body io
 	if upstreamErr != nil {
 		resp.Body.Close()
 		upstreamErr.RetryAfter = resp.Header.Get("Retry-After")
-		a.markQuotaCooldown(c, info, upstreamErr)
+		setQuotaRetryAfter(resp, upstreamErr)
 		return upstreamErrorResponse(resp, upstreamErr), nil
 	}
 	resp.Body = &prefixedBody{Reader: io.MultiReader(bytes.NewReader(prefix), resp.Body), Closer: resp.Body}
 	return resp, nil
 }
 
-// markQuotaCooldown records daily-cap and rate-limit windows so channel
-// selection skips this account's affected model until the reset time.
-func (a *Adaptor) markQuotaCooldown(c *gin.Context, info *relaycommon.RelayInfo, upstreamErr *UpstreamError) {
+// setQuotaRetryAfter states Cline's quota window as a Retry-After header. The
+// relay records the cooldown from the error message and this header, so daily
+// caps without a reset hint still rest for the default window.
+func setQuotaRetryAfter(resp *http.Response, upstreamErr *UpstreamError) {
 	until, ok := upstreamErr.CooldownUntil(time.Now())
-	if !ok || info == nil {
+	if !ok {
 		return
 	}
-	model.MarkChannelModelCooldown(info.ChannelId, info.OriginModelName, until, upstreamErr.Message)
-	if upstreamModel := info.UpstreamModelName; upstreamModel != "" && upstreamModel != info.OriginModelName {
-		model.MarkChannelModelCooldown(info.ChannelId, upstreamModel, until, upstreamErr.Message)
-	}
-	logger.LogInfo(c, fmt.Sprintf(
-		"cline model cooldown: channel #%d model %s until %s",
-		info.ChannelId, info.OriginModelName, until.Format(time.RFC3339),
-	))
+	resp.Header.Set("Retry-After", strconv.FormatInt(int64(math.Ceil(time.Until(until).Seconds())), 10))
 }
 
 // prefixedBody replays the bytes consumed while inspecting the first SSE frame.

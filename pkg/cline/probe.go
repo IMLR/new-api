@@ -30,10 +30,10 @@ type ProbeResult struct {
 // CooldownUntil returns the time when the probed model can serve requests
 // again. The second result is false when the account is not out of quota.
 func (r *ProbeResult) CooldownUntil(now time.Time) (time.Time, bool) {
-	if r == nil || r.Available || r.StatusCode != http.StatusTooManyRequests {
+	if r == nil || r.Available {
 		return time.Time{}, false
 	}
-	return CooldownUntil(r.StatusCode, r.Code, r.Message, r.RetryAfter, now)
+	return CooldownUntil(r.Code, r.Message, r.RetryAfter, now)
 }
 
 // ProbeModel sends one minimal streaming completion. Cline reports the daily

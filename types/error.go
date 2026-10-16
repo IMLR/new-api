@@ -96,6 +96,9 @@ type NewAPIError struct {
 	errorCode      ErrorCode
 	StatusCode     int
 	Metadata       json.RawMessage
+	// RetryAfter keeps the upstream Retry-After header, which states when the
+	// channel can serve the model again.
+	RetryAfter string
 }
 
 // Unwrap enables errors.Is / errors.As to work with NewAPIError by exposing the underlying error.

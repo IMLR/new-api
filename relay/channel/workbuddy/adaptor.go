@@ -544,14 +544,14 @@ func (e *upstreamFrameError) Error() string {
 	return e.Message
 }
 
+// status maps the business code of an in-stream error onto the HTTP status the
+// relay retry rules understand. 6004 is the per-model frequency limit.
 func (e *upstreamFrameError) status() int {
-	if code, ok := e.Code.(float64); ok {
-		switch int(code) {
-		case 429:
-			return http.StatusTooManyRequests
-		case 401:
-			return http.StatusUnauthorized
-		}
+	switch fmt.Sprint(e.Code) {
+	case "429", "6004":
+		return http.StatusTooManyRequests
+	case "401":
+		return http.StatusUnauthorized
 	}
 	return http.StatusBadRequest
 }

@@ -183,6 +183,8 @@ func TestPeekStreamErrorDetectsErrorFrame(t *testing.T) {
 
 	limited := &upstreamFrameError{Code: float64(429), Message: "slow down"}
 	assert.Equal(t, http.StatusTooManyRequests, limited.status())
+	usage := &upstreamFrameError{Code: float64(6004), Message: "usage exceeds frequency limit"}
+	assert.Equal(t, http.StatusTooManyRequests, usage.status())
 }
 
 func TestPeekStreamErrorKeepsNormalFrames(t *testing.T) {

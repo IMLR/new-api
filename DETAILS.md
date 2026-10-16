@@ -18,6 +18,7 @@
 ## Feature documents
 
 - [`docs/model-matching.md`](./docs/model-matching.md): 模型文字匹配、渠道预览、按渠道/模型持久停用，以及路由与价格配置的关系。
+- [`docs/channel-cooldown.md`](./docs/channel-cooldown.md): 从上游报错读取恢复时间，按渠道 × 模型冷却并在到期后自动恢复，所有渠道共用。
 - [`docs/cline.md`](./docs/cline.md): Cline credential import, independent renewal, subscription-aware model discovery, daily/rate cooldowns and exhaustive model-channel retries.
 
 - [`docs/opencode-go.md`](./docs/opencode-go.md): OpenCode Go credential
@@ -58,6 +59,7 @@
 
 ### WorkBuddy 渠道（2026-09-22）
 
+- `pkg/resethint/`：从上游报错正文与 `Retry-After` 读取恢复时间，供渠道模型冷却使用。
 - `pkg/workbuddy/`：账号凭证解析与续期、请求头族、请求体改写管线、SSE 重建与聚合、模型目录与积分余额。
 - `relay/channel/workbuddy/`：按渠道凭证发起请求，处理 401 重试、错误帧与流式/非流式两种下游形态；`upstream_retry.go` 处理 `11133` 的有限重试、失败参数摘要，以及 `11128`、`11133`、`11151` 的跨渠道重试判定。
 - `service/workbuddy.go`、`controller/workbuddy_quota.go`：凭证续期、模型目录读取、积分查询与渠道页积分接口。
